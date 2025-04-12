@@ -1,4 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Enums;
 
 public enum OrderStatusEnum {
+    PENDING, PROCESSING, SHIPPED, DELIVERED, CANCELLED, RETURNED, COMPLETED;
 }

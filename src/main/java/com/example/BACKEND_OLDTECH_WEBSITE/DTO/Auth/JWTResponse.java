@@ -1,4 +1,9 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth;
-//RETURN TOKEN
+import lombok.Builder;
+import lombok.Data;
+
+@Data
 public class JWTResponse {
+
+    private String token;
 }
