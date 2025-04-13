@@ -1,4 +1,9 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Repository;
 
-public class ComplaintRepo {
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Complaint;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ComplaintRepo extends JpaRepository<Complaint, Integer> {
 }

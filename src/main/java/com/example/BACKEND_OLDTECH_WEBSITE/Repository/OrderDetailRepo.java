@@ -1,4 +1,21 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Repository;
 
-public class OrderDetailRepo {
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+
+@Repository
+public interface OrderDetailRepo extends JpaRepository<OrderDetail, Integer> {
+
+
+
+
+
+
+
+
+
+
 }

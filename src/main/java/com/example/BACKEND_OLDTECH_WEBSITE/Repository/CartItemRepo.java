@@ -1,4 +1,9 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Repository;
 
-public class CartItemRepo {
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.CartItem;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface CartItemRepo extends JpaRepository<CartItem, Integer> {
 }

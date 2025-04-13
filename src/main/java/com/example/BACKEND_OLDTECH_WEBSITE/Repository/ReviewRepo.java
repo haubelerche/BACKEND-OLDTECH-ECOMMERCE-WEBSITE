@@ -1,4 +1,10 @@
+// === com/example/BACKEND_OLDTECH_WEBSITE/Repository/ReviewRepo.java ===
 package com.example.BACKEND_OLDTECH_WEBSITE.Repository;
 
-public class ReviewRepo {
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ReviewRepo extends JpaRepository<Review, Integer> {
 }
