@@ -7,8 +7,7 @@ import java.sql.Timestamp;
 
 @Entity
 @Table(name = "cart_item")
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,17 +15,17 @@ public class CartItem {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "cart_item_id")
+    @Column(name = "cart_item_id", nullable = false)
     private Integer cartItemId;
 
     @ManyToOne
-    @JoinColumn(name = "cart_id")
+    @JoinColumn(name = "cart_id", nullable = false)
     private ShoppingCart cartId;
 
     @ManyToOne
-    @JoinColumn(name = "product_id")
-    private Product product;
+    @JoinColumn(name = "product_id", nullable = false)
+    private Product productId;
 
-    @Column(name = "added_at")
+    @Column(name = "added_at", nullable = false)
     private Timestamp addedAt;
 }

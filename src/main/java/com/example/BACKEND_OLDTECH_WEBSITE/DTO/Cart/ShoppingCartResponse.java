@@ -17,4 +17,8 @@ public class ShoppingCartResponse {
     private Integer cartId;
     private Double totalPrice;
     private List<CartItemResponse> items;
+    private String createdAt;
+    private String updatedAt;
+    private User userId;
+
 }

@@ -1,7 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 
 import java.sql.Timestamp;
@@ -9,8 +9,7 @@ import java.sql.Timestamp;
 
 @Entity
 @Table(name = "review")
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,36 +17,36 @@ public class Review {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "review_id")
+    @Column(name = "review_id", nullable = false)
     private Integer reviewId;
 
     @ManyToOne
-    @JoinColumn(name = "order_id")
+    @JoinColumn(name = "order_id", nullable = false)
     private Order orderId;
 
     @ManyToOne
-    @JoinColumn(name = "reviewer_id")
+    @JoinColumn(name = "reviewer_id", nullable = false)
     private User reviewerId;
 
     @ManyToOne
-    @JoinColumn(name = "seller_id")
+    @JoinColumn(name = "seller_id", nullable = false)
     private User sellerId;
 
-    @Column(name = "rating")
-    @NotBlank(message = "Thông tin không được để trống")
+    @Column(name = "rating", nullable = false)
+    
     private Integer rating;
 
     @Column(name = "comment", columnDefinition = "MEDIUMTEXT")
-    @NotBlank(message = "Thông tin không được để trống")
+    
     private String comment;
 
-    @Column(name = "review_time")
+    @Column(name = "review_time", nullable = false)
     private Timestamp reviewTime;
 
     @Column(name = "seller_response", columnDefinition = "MEDIUMTEXT")
-    @NotBlank(message = "Thông tin không được để trống")
+    
     private String sellerResponse;
 
-    @Column(name = "response_time")
+    @Column(name = "response_time", nullable = false)
     private Timestamp responseTime;
 }

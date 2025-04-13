@@ -5,4 +5,5 @@ import lombok.Data;
 public class CartItemRequest {
     private Integer productId;
 
+
 }

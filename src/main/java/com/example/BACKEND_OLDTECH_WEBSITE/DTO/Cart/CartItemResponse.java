@@ -6,4 +6,6 @@ public class CartItemResponse {
     private String cartItemId;
     private String productId;
     private Product product;
+    private Double itemTotal;
+
 }

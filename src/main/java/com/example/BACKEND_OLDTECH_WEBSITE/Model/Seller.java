@@ -1,15 +1,15 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 
 import java.sql.Timestamp;
 
 @Entity
 @Table(name = "seller")
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -17,27 +17,25 @@ public class Seller {
 
     @Id
     @OneToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     private User userId;
 
     @Column(name = "is_approved", columnDefinition = "TINYINT(1)")
-    @NotBlank(message = "Thông tin bắt buộc")
     private Boolean isApproved;
 
-    @Column(name = "business_status", columnDefinition = "TINYINT(1)")
-    @NotBlank(message = "Thông tin bắt buộc")
-    private Boolean businessStatus;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_status",nullable = false)
+    private AccountStatusEnum accountStatus;
 
-    @Column(name = "momo_account", length = 15)
-    @NotBlank(message = "Thông tin bắt buộc")
+    @Column(name = "momo_account", length = 15, nullable = false)
     private String momoAccount;
 
-    @Column(name = "approved_at")
+    @Column(name = "approved_at", nullable = false)
     private Timestamp approvedAt;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
 }

@@ -4,45 +4,35 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
-import java.sql.Timestamp;
 import java.util.List;
 
 @Entity
+@Data
 @Table(name = "category")
-@Getter
-@Setter
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Category {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "category_id")
-    private Integer categoryId;
+    private Long category_id;
 
-    @Column(name = "name", length = 100)
-    @NotBlank(message = "Thông tin không được để trống")
+    @NotBlank(message = "Tên danh mục không được để trống")
     private String name;
 
-    @Column(name = "description", columnDefinition = "MEDIUMTEXT")
-    @NotBlank(message = "Thông tin không được để trống")
-    private String description;
+    @Column(unique = true)
+    private String slug;
 
-    @Column(name = "avatar_url", length = 2048)
-    @NotBlank(message = "Thông tin không được để trống")
-    private String avatarUrl;
-
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "parent_category_id")
-    private Category Category;
+    private Category parentCategoryId;
 
-    @OneToMany(mappedBy = "parentCategory")
-    private List<Category> subcategories;
+    @OneToMany(mappedBy = "parentCategory", cascade = CascadeType.ALL)
+    private List<Category> subCategories;
 
-    @Column(name = "created_at")
-    private Timestamp createdAt;
 
-    @Column(name = "updated_at")
-    private Timestamp updatedAt;
+    @Column(name = "is_visible", columnDefinition = "TINYINT(1)")
+    private boolean isVisible = true;
+
 }

@@ -2,15 +2,14 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatusEnum;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 
 import java.sql.Timestamp;
 
 @Entity
 @Table(name = "complaint")
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -18,36 +17,38 @@ public class Complaint {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "complaint_id")
+    @Column(name = "complaint_id", nullable = false)
     private Integer complaintId;
 
     @ManyToOne
-    @JoinColumn(name = "complainant_id")
+    @JoinColumn(name = "complainant_id", nullable = false)
     private User complainantId;
 
     @ManyToOne
-    @JoinColumn(name = "respondent_id")
+    @JoinColumn(name = "respondent_id", nullable = false)
     private User respondentId;
 
     @ManyToOne
-    @JoinColumn(name = "order_id")
+    @JoinColumn(name = "order_id", nullable = false)
     private Order orderId;
 
-    @Column(name = "reason", columnDefinition = "MEDIUMTEXT")
-    @NotBlank(message = "Thông tin không được để trống")
+    @Column(name = "reason", columnDefinition = "MEDIUMTEXT", nullable = false)
+    
     private String reason;
 
-    @Column(name = "status")
+
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
     private ComplaintStatusEnum status;
 
-    @Column(name = "admin_response", columnDefinition = "MEDIUMTEXT")
-    @NotBlank(message = "Thông tin không được để trống")
-    private String resolutionNotes;
+    @Column(name = "admin_response", columnDefinition = "MEDIUMTEXT", nullable = false)
+    private String adminResponse;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
 
 }

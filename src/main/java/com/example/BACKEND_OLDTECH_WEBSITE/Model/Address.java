@@ -6,45 +6,49 @@ import lombok.*;
 import java.sql.Timestamp;
 @Entity
 @Table(name = "address")
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Address {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "address_id")
+    @Column(name = "address_id", nullable = false)
     private Integer addressId;
 
     @ManyToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     private User userId;
 
-    @Column(name = "city", length= 100)
-    @NotBlank(message = "Thông tin không được để trống")
+    @Column(name = "city", length= 100, nullable = false)
+   
     private String city;
 
-    @Column(name = "district", length =100)
-    @NotBlank(message = "Thông tin không được để trống")
+    @Column(name = "district", length =100, nullable = false)
+   
     private String district;
 
-    @Column(name = "ward", length = 100)
-    @NotBlank(message = "Thông tin không được để trống")
+    @Column(name = "ward", length = 100, nullable = false)
+   
     private String ward;
 
-    @Column(name = "street", length = 200)
-    @NotBlank(message = "Thông tin không được để trống")
+    @Column(name = "street", length = 200, nullable = false)
+   
     private String street;
 
-    @Column(name = "address_type")   //home, cpn, warehouse, other
+    @Column(name = "detailed_address", nullable = false)
+    private String detailedAddress;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "address_type", nullable = false)   //home, cpn, warehouse, other
     private AddressTypeEnum addressType;
-    @Column(name = "is_default", columnDefinition = "TINYINT(1)")
+
+    @Column(name = "is_default", columnDefinition = "TINYINT(1)", nullable = false)
     private Boolean isDefault;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
 }

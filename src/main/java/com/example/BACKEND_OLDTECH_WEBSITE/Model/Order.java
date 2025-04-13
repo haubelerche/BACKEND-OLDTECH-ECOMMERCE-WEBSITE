@@ -1,17 +1,16 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.util.List;
+
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
 
 @Entity
 @Table(name = "order")
-@Getter
-@Setter
+@Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -19,38 +18,37 @@ public class Order {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "order_id")
+    @Column(name = "order_id", nullable = false)
     private Integer orderId;
-    @Column(name = "order_time")
+    @Column(name = "order_time", nullable = false)
     private Timestamp orderTime;
     @ManyToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", nullable = false)
     private User userId;
 
     @ManyToOne
-    @JoinColumn(name = "shipping_address_id")
+    @JoinColumn(name = "shipping_address_id", nullable = false)
     private Address ShippingAddressId;
 
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "payment_method")
-    @NotBlank(message = "Thông tin không được để trống")
+    @Column(name = "payment_method", nullable = false)
     private PaymentMethodEnum paymentMethod;
 
-    @Column(name = "total_amount", precision = 12, scale = 2)
+    @Column(name = "total_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal totalAmount;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status")
+    @Column(name = "status", nullable = false)
     private OrderStatusEnum status;
 
     @Column(name = "notes", columnDefinition = "MEDIUMTEXT")
     private String notes;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
 
 
