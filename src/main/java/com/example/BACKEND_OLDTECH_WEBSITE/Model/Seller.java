@@ -16,9 +16,10 @@ import java.sql.Timestamp;
 public class Seller {
 
     @Id
-    @OneToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private User userId;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+
+    @Column(name = "seller_id", nullable = false)
+    private Integer sellerId;
 
     @Column(name = "is_approved", columnDefinition = "TINYINT(1)")
     private Boolean isApproved;
@@ -39,3 +40,5 @@ public class Seller {
     @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
 }
+//Referencing column 'seller_id' and referenced column 'user_id' in foreign key constraint 'FK81ec0le2kjk0obbodah7c953d' are incompatible.
+// errors come from bigint in seller_id

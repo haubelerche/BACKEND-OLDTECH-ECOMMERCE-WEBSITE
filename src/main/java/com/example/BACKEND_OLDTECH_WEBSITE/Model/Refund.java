@@ -2,7 +2,6 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RefundStatusEnum;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
 import java.sql.Timestamp;
@@ -23,7 +22,7 @@ public class Refund {
 
     @ManyToOne
     @JoinColumn(name = "order_id", nullable = false)
-    private Order orderId;
+    private Orders orderId;
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)

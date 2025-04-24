@@ -10,10 +10,11 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class CategoryResponse {
-    private Long id;
+    private Long category_id;
     private String name;
     private String slug;
-    private Long parentId;
+    private Long parent_category_id;
+    private boolean isVisible;
     private List<CategoryResponse> subCategories;
 }
 

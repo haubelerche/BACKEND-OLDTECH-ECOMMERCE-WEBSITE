@@ -20,9 +20,9 @@ public class Review {
     @Column(name = "review_id", nullable = false)
     private Integer reviewId;
 
-    @ManyToOne
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order orderId;
+
+    @Column(name = "order_id", nullable = false)
+    private Integer orderId;
 
     @ManyToOne
     @JoinColumn(name = "reviewer_id", nullable = false)
@@ -30,7 +30,7 @@ public class Review {
 
     @ManyToOne
     @JoinColumn(name = "seller_id", nullable = false)
-    private User sellerId;
+    private Seller sellerId;
 
     @Column(name = "rating", nullable = false)
     

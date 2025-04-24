@@ -30,7 +30,7 @@ public class Complaint {
 
     @ManyToOne
     @JoinColumn(name = "order_id", nullable = false)
-    private Order orderId;
+    private Orders orderId;
 
     @Column(name = "reason", columnDefinition = "MEDIUMTEXT", nullable = false)
     

@@ -4,7 +4,8 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
-import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
 
 @Entity
 @Data
@@ -16,7 +17,8 @@ public class Category {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long category_id;
+
+    private Integer category_id;
 
     @NotBlank(message = "Tên danh mục không được để trống")
     private String name;
@@ -26,13 +28,11 @@ public class Category {
 
     @ManyToOne
     @JoinColumn(name = "parent_category_id")
-    private Category parentCategoryId;
+    private Category parentCategory;
 
-    @OneToMany(mappedBy = "parentCategory", cascade = CascadeType.ALL)
-    private List<Category> subCategories;
-
+    @OneToMany(mappedBy = "parentCategory", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Category> subcategories = new HashSet<>();
 
     @Column(name = "is_visible", columnDefinition = "TINYINT(1)")
     private boolean isVisible = true;
-
 }

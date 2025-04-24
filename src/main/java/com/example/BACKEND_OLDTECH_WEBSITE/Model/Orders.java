@@ -9,12 +9,12 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
 
 @Entity
-@Table(name = "order")
+@Table(name = "orders")
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Order {
+public class Orders {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
