@@ -16,17 +16,12 @@ public class ShoppingCart {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "cart_id", nullable = false)
     private Integer cartId;
 
-    @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private User userId;
+    private Integer userId;
 
-    @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
 
-    @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
 
 }

@@ -16,20 +16,15 @@ public class ProductImage {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "image_id", nullable = false)
     private Integer imageId;
 
-    @ManyToOne
-    @JoinColumn(name = "product_id", nullable = false)
-    private Product productId;
 
-    @Column(name = "image_url", length = 2048, nullable = false)
-    
+    private Integer productId;
+
+
     private String imageUrl;
 
-    @Column(name = "is_thumbnail", columnDefinition = "TINYINT(1)", nullable = false)
     private Boolean isThumbnail;
 
-    @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
 }

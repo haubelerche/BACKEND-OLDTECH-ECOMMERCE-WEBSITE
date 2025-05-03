@@ -17,36 +17,28 @@ public class Review {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "review_id", nullable = false)
+
     private Integer reviewId;
 
 
-    @Column(name = "order_id", nullable = false)
     private Integer orderId;
 
-    @ManyToOne
-    @JoinColumn(name = "reviewer_id", nullable = false)
-    private User reviewerId;
 
-    @ManyToOne
-    @JoinColumn(name = "seller_id", nullable = false)
-    private Seller sellerId;
+    private Integer reviewerId;
 
-    @Column(name = "rating", nullable = false)
+
+    private Integer sellerId;
+
     
     private Integer rating;
 
-    @Column(name = "comment", columnDefinition = "MEDIUMTEXT")
-    
+
     private String comment;
 
-    @Column(name = "review_time", nullable = false)
     private Timestamp reviewTime;
 
-    @Column(name = "seller_response", columnDefinition = "MEDIUMTEXT")
-    
+
     private String sellerResponse;
 
-    @Column(name = "response_time", nullable = false)
     private Timestamp responseTime;
 }

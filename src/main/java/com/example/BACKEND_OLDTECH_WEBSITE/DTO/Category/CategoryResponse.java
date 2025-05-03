@@ -10,7 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class CategoryResponse {
-    private Long category_id;
+    private Integer category_id;
     private String name;
     private String slug;
     private Long parent_category_id;

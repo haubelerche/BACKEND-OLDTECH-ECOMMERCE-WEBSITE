@@ -19,6 +19,6 @@ public class ShoppingCartResponse {
     private List<CartItemResponse> items;
     private String createdAt;
     private String updatedAt;
-    private User userId;
+    private Integer userId;
 
 }

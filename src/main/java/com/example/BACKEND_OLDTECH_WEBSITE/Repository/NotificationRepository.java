@@ -1,9 +1,9 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Repository;
 
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.CartItem;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface CartItemRepo extends JpaRepository<CartItem, Integer> {
+public interface NotificationRepository extends JpaRepository<Notification, Long> {
 }

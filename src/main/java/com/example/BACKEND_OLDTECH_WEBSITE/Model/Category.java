@@ -17,22 +17,18 @@ public class Category {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-
     private Integer category_id;
 
-    @NotBlank(message = "Tên danh mục không được để trống")
     private String name;
 
-    @Column(unique = true)
     private String slug;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_category_id")
-    private Category parentCategory;
+    private Category parentCategoryId;
 
-    @OneToMany(mappedBy = "parentCategory", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "parentCategoryId", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Category> subcategories = new HashSet<>();
 
-    @Column(name = "is_visible", columnDefinition = "TINYINT(1)")
     private boolean isVisible = true;
 }

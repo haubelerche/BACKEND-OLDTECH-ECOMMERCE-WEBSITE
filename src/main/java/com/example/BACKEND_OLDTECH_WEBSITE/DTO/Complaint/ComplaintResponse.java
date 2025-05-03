@@ -7,9 +7,9 @@ import lombok.Data;
 @Data
 public class ComplaintResponse {
     private Integer complaintId;
-    private String complainantId;
+    private Integer complainantId;
     private Integer respondentId;
-    private String orderId;
+    private Integer orderId;
     private String reason;
     @NotBlank(message = "Cập nhật trạng thái không được để trống")
     private String status;

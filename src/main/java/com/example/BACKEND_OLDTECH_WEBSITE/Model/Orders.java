@@ -1,6 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 import jakarta.persistence.*;
 
+import jakarta.persistence.criteria.CriteriaBuilder;
 import lombok.*;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -18,37 +19,23 @@ public class Orders {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "order_id", nullable = false)
     private Integer orderId;
-    @Column(name = "order_time", nullable = false)
     private Timestamp orderTime;
-    @ManyToOne
-    @JoinColumn(name = "user_id", nullable = false)
-    private User userId;
 
-    @ManyToOne
-    @JoinColumn(name = "shipping_address_id", nullable = false)
-    private Address ShippingAddressId;
+    private Integer userId;
 
+    private Integer ShippingAddressId;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "payment_method", nullable = false)
     private PaymentMethodEnum paymentMethod;
 
-    @Column(name = "total_amount", precision = 12, scale = 2, nullable = false)
     private BigDecimal totalAmount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
     private OrderStatusEnum status;
 
-    @Column(name = "notes", columnDefinition = "MEDIUMTEXT")
     private String notes;
 
-    @Column(name = "created_at", nullable = false)
     private Timestamp createdAt;
 
-    @Column(name = "updated_at", nullable = false)
     private Timestamp updatedAt;
 
 

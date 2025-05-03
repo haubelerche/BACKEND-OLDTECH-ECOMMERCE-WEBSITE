@@ -7,7 +7,7 @@ import java.sql.Timestamp;
 
 @Data
 public class NotificationDTO {
-    private Long notificationId;
+    private Integer notificationId;
     private Integer recipientId;
     private String senderInfo;
     private String type;
