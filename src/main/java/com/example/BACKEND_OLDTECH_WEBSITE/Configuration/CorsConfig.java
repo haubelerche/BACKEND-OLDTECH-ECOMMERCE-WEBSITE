@@ -6,23 +6,29 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
-import java.util.Arrays;
-
 @Configuration
 public class CorsConfig {
 
     @Bean
     public CorsFilter corsFilter() {
-        CorsConfiguration corsConfiguration = new CorsConfiguration();
-        corsConfiguration.setAllowedOrigins(Arrays.asList("http://localhost:3000")); //frontend localhost will replace in here
-        corsConfiguration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        corsConfiguration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Accept"));
-        corsConfiguration.setAllowCredentials(true);
-        corsConfiguration.setMaxAge(3600L);
-
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", corsConfiguration);
-
+        CorsConfiguration config = new CorsConfiguration();
+        
+        // Allow all origins for development (you should restrict this in production)
+        config.addAllowedOrigin("http://localhost:3000"); // React default port
+        
+        // Allow all HTTP methods
+        config.addAllowedMethod("*");
+        
+        // Allow all headers
+        config.addAllowedHeader("*");
+        
+        // Allow credentials (cookies, authorization headers)
+        config.setAllowCredentials(true);
+        
+        // Apply this configuration to all paths
+        source.registerCorsConfiguration("/**", config);
+        
         return new CorsFilter(source);
     }
 }

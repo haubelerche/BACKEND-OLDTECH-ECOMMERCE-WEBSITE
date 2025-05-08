@@ -20,28 +20,26 @@ import java.util.Date;
 @AllArgsConstructor
 public class RegisterRequest {
 
-    @NotBlank(message = "Tên đăng nhập không được để trống")
-    @Email(message = "Định dạng email không hợp lệ")
+    @NotBlank(message = "Tên không được để trống")
+    private String name;
+
+    @NotBlank(message = "Email không được để trống")
+    @Email(message = "Email không hợp lệ")
     @UniqueEmail(message = "Email đã tồn tại")  // cái này sẽ check ở user repo
     private String email;
 
-
     @NotBlank(message = "Mật khẩu không được để trống")
-    @Size(min = 10, max = 20, message = "Mật khẩu phải từ 10 đến 20 ký tự")
-    @Pattern(regexp = "^[a-zA-Z0-9._-]+$", message = "Password phải chứa cả chữ cái và số hoặc ký tự đặc biệt")
+    @Size(min = 6, message = "Mật khẩu phải có ít nhất 6 ký tự")
     private String password;
 
-
     @NotBlank(message = "Số điện thoại không được để trống")
-    @Size(min = 10, max = 10, message = "Số điện thoại phải gồm 10 số")
-    @Pattern(regexp = "^[0-9]+$", message = "Số điện thoại chỉ được chứa chữ số")
     @Pattern(regexp = "^0[0-9]{9}$", message = "Số điện thoại phải bắt đầu bằng số 0 và có 10 chữ số")
     @UniquePhoneNumber(message = "Số điện thoại đã tồn tại")
-    private String phone_number;
+    private String phoneNumber;
 
-@NotBlank(message = "Họ không được để trống")
-    private String first_name;
-    private String last_name;
+    @NotBlank(message = "Họ không được để trống")
+    private String firstName;
+    private String lastName;
 
     private RoleEnum role;
 

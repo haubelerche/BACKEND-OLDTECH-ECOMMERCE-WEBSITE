@@ -22,7 +22,6 @@ public class Seller {
 
     private Boolean isApproved;
 
-
     private AccountStatusEnum accountStatus;
 
     private String momoAccount;
@@ -33,5 +32,3 @@ public class Seller {
 
     private Timestamp updatedAt;
 }
-//Referencing column 'seller_id' and referenced column 'user_id' in foreign key constraint 'FK81ec0le2kjk0obbodah7c953d' are incompatible.
-// errors come from bigint in seller_id

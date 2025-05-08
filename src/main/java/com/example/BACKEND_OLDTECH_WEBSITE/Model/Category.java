@@ -1,34 +1,34 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Data
 @Table(name = "category")
+@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class Category {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Integer category_id;
+    @Column(name = "category_id")
+    private Integer id;
 
+    @Column(nullable = false)
     private String name;
-
-    private String slug;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_category_id")
-    private Category parentCategoryId;
+    private Category parent;
 
-    @OneToMany(mappedBy = "parentCategoryId", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Category> subcategories = new HashSet<>();
 
+    @Column(name = "is_visible")
     private boolean isVisible = true;
 }

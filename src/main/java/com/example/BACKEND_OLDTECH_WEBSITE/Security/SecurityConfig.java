@@ -1,50 +1,77 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Security;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.oauth2.client.registration.ClientRegistration;
-import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-
-import java.util.List;
-import java.util.stream.Collectors;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.filter.CorsFilter;
 
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JWTAuthenticationFilter jwtAuthenticationFilter;
+    private final UserService userService;
+    private final PasswordEncoder passwordEncoder;
+    private final CorsFilter corsFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/error", "/css/**", "/js/**").permitAll()
-                        .anyRequest().authenticated()
+            .csrf(csrf -> csrf.disable())
+            .cors(cors -> cors.disable())
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(
+                    "/api/auth/**",
+                    "/oauth2/**",
+                    "/login/oauth2/**",
+                    "/api/public/**",
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**"
+                ).permitAll()
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authenticationProvider(authenticationProvider())
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(corsFilter, UsernamePasswordAuthenticationFilter.class)
+            .oauth2Login(oauth2 -> oauth2
+                .authorizationEndpoint(authorization -> authorization
+                    .baseUri("/oauth2/authorize")
                 )
-                .oauth2Login(oauth2 -> oauth2
-                        .loginPage("/login") // chỉ dùng nếu bạn có controller trả về trang login
-                        .defaultSuccessUrl("/home", true)
+                .redirectionEndpoint(redirection -> redirection
+                    .baseUri("/oauth2/callback/*")
                 )
-                .logout(logout -> logout
-                        .logoutSuccessUrl("/")
-                        .permitAll()
-                );
+            );
 
         return http.build();
+    }
+
+    @Bean
+    public AuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userService);
+        authProvider.setPasswordEncoder(passwordEncoder);
+        return authProvider;
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
+        return config.getAuthenticationManager();
     }
 }
 
 
-
-    /*@Bean
-    public ClientRegistrationRepository clientRegistrationRepo() {
-        List<ClientRegistration> registrations = clients.stream()
-                .map(c -> getRegistration(c))
-                .filter(registration -> registration != null)
-                .collect(Collectors.toList());
-
-        return new InMemoryClientRegistrationRepository(registrations);
-    }
-}*/

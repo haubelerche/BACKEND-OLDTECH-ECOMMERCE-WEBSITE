@@ -1,30 +1,31 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.core.user.OAuth2User;
-import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.TokenResponse;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.OAuth2Service;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.web.bind.annotation.*;
 
-@Controller
+@RestController
+@RequestMapping("/oauth2")
+@RequiredArgsConstructor
 public class OAuth2LoginController {
 
-    @GetMapping("/")
-    public String index() {
-        return "index";
-    }
+    private final OAuth2Service oauth2Service;
 
     @GetMapping("/login")
-    public String login() {
-        return "login";
+    public ResponseEntity<String> login() {
+        return ResponseEntity.ok("Please login through the frontend application");
     }
 
-    @GetMapping("/home")
-    public String home(@AuthenticationPrincipal OAuth2User principal, Model model) {
-        if (principal != null) {
-            model.addAttribute("username", principal.getAttribute("username"));
-            model.addAttribute("email", principal.getAttribute("email"));
-        }
-        return "home";
+    @GetMapping("/success")
+    public ResponseEntity<TokenResponse> success(OAuth2AuthenticationToken authentication) {
+        return ResponseEntity.ok(oauth2Service.processOAuth2Login(authentication));
+    }
+
+    @GetMapping("/user")
+    public ResponseEntity<?> getCurrentUser() {
+        return ResponseEntity.ok(oauth2Service.getCurrentOAuth2UserInfo());
     }
 }
