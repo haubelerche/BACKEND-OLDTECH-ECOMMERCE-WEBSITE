@@ -117,7 +117,21 @@
 			<artifactId>spring-dotenv</artifactId>
 			<version>3.0.0</version>
 		</dependency>
+
+		<!-- MOMO Payment -->
+		<dependency>
+			<groupId>io.github.momo-wallet</groupId>
+			<artifactId>momopayment</artifactId>
+			<version>1.0</version>
+		</dependency>
 	</dependencies>
+
+	<repositories>
+		<repository>
+			<id>ossrh</id>
+			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+		</repository>
+	</repositories>
 
 	<dependencyManagement>
 		<dependencies>
@@ -130,7 +144,6 @@
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
-
 	<build>
 		<plugins>
 			<plugin>
