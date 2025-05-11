@@ -15,11 +15,16 @@ public class OrderDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(columnDefinition = "INT UNSIGNED")
     private Integer orderDetailId;
 
-    private Integer orderId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false, columnDefinition = "INT UNSIGNED")
+    private Orders order;
 
-    private Integer productId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", nullable = false, columnDefinition = "INT UNSIGNED")
+    private Product product;
 
     private BigDecimal priceAtPurchase;
 }

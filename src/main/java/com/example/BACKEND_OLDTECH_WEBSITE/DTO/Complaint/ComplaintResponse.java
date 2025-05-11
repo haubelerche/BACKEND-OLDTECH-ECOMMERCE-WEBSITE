@@ -1,6 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Complaint;
 
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Complaint;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 

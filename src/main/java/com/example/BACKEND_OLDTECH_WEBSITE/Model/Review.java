@@ -29,6 +29,8 @@ public class Review {
 
     private Integer sellerId;
 
+    private Integer productId; //vẫn để productId ở đây vì nhận xét người bán, đính kèm theo ng mua đã mua gì của nó mà đánh giá nó thế. ok
+
     
     private Integer rating;
 

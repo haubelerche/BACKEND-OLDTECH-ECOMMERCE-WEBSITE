@@ -1,7 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 import jakarta.persistence.*;
 
-import jakarta.persistence.criteria.CriteriaBuilder;
 import lombok.*;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -19,12 +18,16 @@ public class Orders {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "order_id", columnDefinition = "INT UNSIGNED")
     private Integer orderId;
+    
     private Timestamp orderTime;
 
+    @Column(name = "user_id", columnDefinition = "INT UNSIGNED")
     private Integer userId;
 
-    private Integer ShippingAddressId;
+    @Column(name = "shipping_address_id", columnDefinition = "INT UNSIGNED")
+    private Integer shippingAddressId;
 
     private PaymentMethodEnum paymentMethod;
 
@@ -37,6 +40,12 @@ public class Orders {
     private Timestamp createdAt;
 
     private Timestamp updatedAt;
-
-
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "shipping_address_id", referencedColumnName = "address_id", insertable = false, updatable = false)
+    private Address shippingAddress;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id", insertable = false, updatable = false)
+    private User user;
 }

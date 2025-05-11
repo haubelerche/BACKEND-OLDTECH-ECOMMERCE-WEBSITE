@@ -1,7 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Configuration.MomoPayment;
-import com.example.BACKEND_OLDTECH_WEBSITE.DTO.PaymentRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Payment.PaymentRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -9,14 +9,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/payment")
+@RequestMapping("/payment")
 @CrossOrigin(origins = "${frontend.url}")
 public class PaymentController {
     
     @Autowired
     private MomoPayment momoPayment;
     
-    @PostMapping("/create")
+    @PostMapping("/createPayment")
     public ResponseEntity<?> createPayment(@RequestBody PaymentRequest request) {
         try {
             String paymentUrl = momoPayment.createPaymentRequest(
@@ -30,7 +30,7 @@ public class PaymentController {
         }
     }
     
-    @PostMapping("/return")
+    @PostMapping("/handlePaymentReturn")
     public ResponseEntity<?> handlePaymentReturn(@RequestParam Map<String, String> response) {
         try {
             if (momoPayment.verifyPaymentResponse(response)) {
@@ -65,13 +65,12 @@ public class PaymentController {
         }
     }
     
-    @PostMapping("/ipn")
+    @PostMapping("/handleIPN")
     public ResponseEntity<?> handleIPN(@RequestParam Map<String, String> response) {
         try {
             if (momoPayment.verifyPaymentResponse(response)) {
                 // Process IPN (Instant Payment Notification)
                 String orderId = response.get("orderId");
-                String resultCode = response.get("resultCode");
                 
                 // Here you would typically update your database with the payment status
                 // and perform any necessary business logic

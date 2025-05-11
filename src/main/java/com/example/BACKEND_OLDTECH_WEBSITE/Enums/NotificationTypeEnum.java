@@ -1,6 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Enums;
 
 public enum NotificationTypeEnum {
-    SYSTEM,ORDER_UPDATE,ADMIN_MESSAGE,REVIEW_UPDATE,COMPLAINT_UPDATE,
-    REFUND_UPDATE,NEW_PRODUCT,PROMOTION,OTHER
+    System,OrderUpdate,AdminMessage,ReviewUpdate,ComplaintUpdate,
+    RefundUpdate,NewProduct,Promotion,Other
 }

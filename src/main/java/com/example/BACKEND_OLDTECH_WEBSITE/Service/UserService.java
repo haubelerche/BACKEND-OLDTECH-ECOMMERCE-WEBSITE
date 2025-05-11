@@ -1,12 +1,20 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.UpdateUserProfileRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.ChangePasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AuthProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatus;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Complaint;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.UserRepository;
-import lombok.RequiredArgsConstructor;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ComplaintRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.NotificationRepository;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -14,16 +22,31 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.oauth2.core.user.OAuth2User;
-import java.util.UUID;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Service
-@RequiredArgsConstructor
 public class UserService implements UserDetailsService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ComplaintRepository complaintRepository;
+    private final NotificationRepository notificationRepository;
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
+
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, ComplaintRepository complaintRepository, NotificationRepository notificationRepository) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.complaintRepository = complaintRepository;
+        this.notificationRepository = notificationRepository;
+    }
 
     public boolean existsByEmail(String email) {
         return userRepository.existsByEmail(email);
@@ -43,11 +66,83 @@ public class UserService implements UserDetailsService {
         user.setPhoneNumber(registerRequest.getPhoneNumber());
         user.setCreatedAt(Timestamp.from(Instant.now()));
         user.setUpdatedAt(Timestamp.from(Instant.now()));
-        user.setIsActive(true);
-        user.setRole(RoleEnum.USER);
+        user.setAccountStatus(AccountStatusEnum.Active);
         user.setAuthProvider(AuthProvider.valueOf("local"));
 
-        return userRepository.save(user);
+        if (registerRequest.getDob() != null) {
+            user.setDob(new java.sql.Date(registerRequest.getDob().getTime()));
+        }
+
+
+        user.setAvatarUrl(registerRequest.getAvatarUrl());
+
+      
+        if (registerRequest.getRole() != null) {
+            user.setRole(registerRequest.getRole());
+        } else {
+            user.setRole(RoleEnum.Customer);
+        }
+
+        user.setIsVerified(false);
+
+        User savedUser = userRepository.save(user);
+        
+        // Send welcome notification
+        sendWelcomeNotification(savedUser);
+        
+        // Send profile completion notification if profile is incomplete
+        if (isProfileIncomplete(savedUser)) {
+            sendProfileCompletionNotification(savedUser);
+        }
+        
+        // Send verification notification
+        sendVerificationRequiredNotification(savedUser);
+        
+        return savedUser;
+    }
+    
+    private boolean isProfileIncomplete(User user) {
+        // Check required fields for a complete profile
+        return user.getPhoneNumber() == null || 
+               user.getDob() == null ||
+               (!user.getIsVerified() && 
+                (user.getRole() == RoleEnum.Seller || user.getRole() == RoleEnum.Customer));
+    }
+    
+    private void sendWelcomeNotification(User user) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Chào mừng bạn đến với OldTech! Cảm ơn bạn đã đăng ký tài khoản.");
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.System);
+        notificationRepository.save(notification);
+        
+        log.info("Sent welcome notification to user ID: {}", user.getUserId());
+    }
+    
+    private void sendProfileCompletionNotification(User user) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Vui lòng vào phần cài đặt và cập nhật đầy đủ thông tin cá nhân của bạn để hoàn tất đăng ký tài khoản.");
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.System);
+        notificationRepository.save(notification);
+        
+        log.info("Sent profile completion notification to user ID: {}", user.getUserId());
+    }
+    
+    private void sendVerificationRequiredNotification(User user) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Vui lòng gửi tất cả thông tin cần thiết để xác minh tài khoản của bạn. Điều này sẽ giúp tăng độ tin cậy khi sử dụng nền tảng của chúng tôi.");
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.System);
+        notificationRepository.save(notification);
+        
+        log.info("Sent verification required notification to user ID: {}", user.getUserId());
     }
 
     @Override
@@ -58,36 +153,300 @@ public class UserService implements UserDetailsService {
 
     @Transactional
     public User processOAuth2User(OAuth2User oauth2User, String provider) {
-        String email = oauth2User.getAttribute("email");
-        String providerId = oauth2User.getAttribute("sub");
+        final String email = oauth2User.getAttribute("email");
+        final String providerId = extractProviderId(oauth2User, provider);
+        
+      
+        final String accessToken = oauth2User.getAttribute("access_token");
+        final String refreshToken = oauth2User.getAttribute("refresh_token");
+        final Timestamp tokenExpiryTimestamp = extractTokenExpiry(oauth2User);
+        
+       
+        final String pictureUrl = extractProfilePicture(oauth2User, provider);
+        
+        log.info("Processing OAuth2 user with email: {}, provider: {}", email, provider);
         
         User user = userRepository.findByEmail(email)
-            .orElseGet(() -> {
-                User newUser = new User();
-                newUser.setEmail(email);
-                // Split the name into first and last name
-                String fullName = oauth2User.getAttribute("name");
-                String[] nameParts = fullName.split(" ", 2);
-                newUser.setFirstName(nameParts[0]);
-                newUser.setLastName(nameParts.length > 1 ? nameParts[1] : "");
-                newUser.setAuthProvider(AuthProvider.valueOf(provider));
-                newUser.setAuthProviderId(providerId);
-                newUser.setAuthProviderToken(oauth2User.getAttribute("access_token"));
-                newUser.setAuthProviderRefreshToken(oauth2User.getAttribute("refresh_token"));
-                newUser.setAuthProviderTokenExpires(Timestamp.from(Instant.now().plusSeconds(3600))); // Default 1 hour
-                newUser.setIsActive(true);
-                newUser.setRole(RoleEnum.USER);
-                newUser.setCreatedAt(Timestamp.from(Instant.now()));
-                newUser.setUpdatedAt(Timestamp.from(Instant.now()));
-                return newUser;
-            });
+            .orElseGet(() -> createNewOAuth2User(oauth2User, email, provider, providerId, accessToken, refreshToken, tokenExpiryTimestamp, pictureUrl));
 
-        // Update OAuth2 tokens for existing user
-        user.setAuthProviderToken(oauth2User.getAttribute("access_token"));
-        user.setAuthProviderRefreshToken(oauth2User.getAttribute("refresh_token"));
-        user.setAuthProviderTokenExpires(Timestamp.from(Instant.now().plusSeconds(3600)));
-        user.setLastLogin(Timestamp.from(Instant.now()));
+      
+        updateOAuth2UserInfo(user, provider, providerId, accessToken, refreshToken, tokenExpiryTimestamp, pictureUrl);
         
+        log.info("Updated OAuth2 tokens for user: {}, provider: {}", email, provider);
         return userRepository.save(user);
+    }
+    
+    private String extractProviderId(OAuth2User oauth2User, String provider) {
+        String providerId = oauth2User.getAttribute("sub");
+        if (providerId == null) {
+       
+            providerId = oauth2User.getAttribute("id");
+        }
+        return providerId;
+    }
+    
+    private Timestamp extractTokenExpiry(OAuth2User oauth2User) {
+        Long tokenExpires = oauth2User.getAttribute("token_expires");
+        if (tokenExpires != null) {
+            return new Timestamp(tokenExpires);
+        } else {
+            // Default 1 hour if not specified
+            return Timestamp.from(Instant.now().plusSeconds(3600));
+        }
+    }
+    
+    private String extractProfilePicture(OAuth2User oauth2User, String provider) {
+        if ("google".equals(provider)) {
+            return oauth2User.getAttribute("picture");
+        } else if ("facebook".equals(provider)) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> picture = oauth2User.getAttribute("picture");
+            if (picture != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) picture.get("data");
+                if (data != null) {
+                    return (String) data.get("url");
+                }
+            }
+        }
+        return null;
+    }
+    
+    private User createNewOAuth2User(OAuth2User oauth2User, String email, String provider, 
+                                   String providerId, String accessToken, String refreshToken, 
+                                   Timestamp tokenExpiryTimestamp, String pictureUrl) {
+        User newUser = new User();
+        newUser.setEmail(email);
+        
+        // Split the name into first and last name ..
+        String fullName = oauth2User.getAttribute("name");
+        if (fullName == null) {
+            fullName = email != null ? email.split("@")[0] : "User"; 
+        }
+        String[] nameParts = fullName.split(" ", 2);
+        newUser.setFirstName(nameParts[0]);
+        newUser.setLastName(nameParts.length > 1 ? nameParts[1] : "");
+        
+        newUser.setAuthProvider(AuthProvider.valueOf(provider.toUpperCase()));
+        newUser.setAuthProviderId(providerId);
+        newUser.setAuthProviderToken(accessToken);
+        newUser.setAuthProviderRefreshToken(refreshToken);
+        newUser.setAuthProviderTokenExpires(tokenExpiryTimestamp);
+        newUser.setAvatarUrl(pictureUrl);
+        newUser.setAccountStatus(AccountStatusEnum.Active);
+        newUser.setRole(RoleEnum.Customer);
+        newUser.setIsVerified(false); // Require manual verification
+        newUser.setCreatedAt(Timestamp.from(Instant.now()));
+        newUser.setUpdatedAt(Timestamp.from(Instant.now()));
+        newUser.setLastLogin(Timestamp.from(Instant.now()));
+        
+        log.info("Created new user via OAuth2 provider: {}", provider);
+        return newUser;
+    }
+    
+    private void updateOAuth2UserInfo(User user, String provider, String providerId, 
+                                    String accessToken, String refreshToken, 
+                                    Timestamp tokenExpiryTimestamp, String pictureUrl) {
+        user.setAuthProvider(AuthProvider.valueOf(provider.toUpperCase()));
+        user.setAuthProviderId(providerId);
+        user.setAuthProviderToken(accessToken);
+        user.setAuthProviderRefreshToken(refreshToken);
+        user.setAuthProviderTokenExpires(tokenExpiryTimestamp);
+        
+        // Update avatar URL if not set or if from same provider
+        if (user.getAvatarUrl() == null || 
+            (pictureUrl != null && user.getAuthProvider().name().equalsIgnoreCase(provider))) {
+            user.setAvatarUrl(pictureUrl);
+        }
+        
+        user.setLastLogin(Timestamp.from(Instant.now()));
+    }
+
+    public User getUserById(Integer userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+    }
+
+    @Transactional
+    public void deactivateAccount(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        user.setAccountStatus(AccountStatusEnum.Inactive);
+        user.setUpdatedAt(Timestamp.from(Instant.now())); 
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public User updateUserProfile(Integer userId, UpdateUserProfileRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
+
+        // Handle Email Change with Uniqueness Check
+        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new IllegalArgumentException("Email " + request.getEmail() + " đã tồn tại.");
+            }
+            // Add regex pattern check if needed here, though @Pattern on User model handles it at persistence
+            user.setEmail(request.getEmail());
+        }
+
+        // Handle Phone Number Change with Uniqueness Check
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().equals(user.getPhoneNumber())) {
+            if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+                throw new IllegalArgumentException("Số điện thoại " + request.getPhoneNumber() + " đã tồn tại.");
+            } // Add regex pattern check if needed here, though @Pattern on User model handles it at persistence
+            user.setPhoneNumber(request.getPhoneNumber());
+        }
+
+        if (request.getDob() != null) {
+            user.setDob(new java.sql.Date(request.getDob().getTime()));
+        }
+        if (request.getAvatarUrl() != null) {
+            user.setAvatarUrl(request.getAvatarUrl());
+        }
+        
+        // Handle RefundMomoAccount Change
+        if (request.getRefundMomoAccount() != null) {
+            user.setRefundMomoAccount(request.getRefundMomoAccount());
+        }
+
+     
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public void changePassword(Integer userId, ChangePasswordRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        // Verify old password
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new IllegalArgumentException("Mật khẩu cũ không chính xác."); // Or a custom exception
+        }
+
+        // Update to new password
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void requestVerification(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
+
+        if (user.getIsVerified()) {
+            System.out.println("Người dùng " + userId + " đã được xác thực.");
+          
+            // throw new IllegalStateException("User is already verified.");
+        } else {
+            // Send a notification about the verification request
+            sendVerificationRequestSubmittedNotification(user);
+            
+            System.out.println("Yêu cầu xác thực đã được gửi cho người dùng ID: " + userId + ". Chờ phê duyệt từ quản trị viên.");
+            // user.setVerificationStatus(VerificationStatus.PENDING_APPROVAL); // Example if you have such a field
+            // userRepository.save(user); // If any user state was changed
+        }
+    }
+    
+    private void sendVerificationRequestSubmittedNotification(User user) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Yêu cầu xác thực tài khoản của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.");
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        notificationRepository.save(notification);
+        
+        log.info("Sent verification request submitted notification to user ID: {}", user.getUserId());
+    }
+
+    @Transactional
+    public void fileComplaint(Integer userId, String complaintText) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot file complaint."));
+
+        Complaint newComplaint = new Complaint();
+        newComplaint.setComplainantId(userId);
+        newComplaint.setReason(complaintText);
+        newComplaint.setStatus(ComplaintStatus.Pending);
+        newComplaint.setCreatedAt(Timestamp.from(Instant.now()));
+        newComplaint.setUpdatedAt(Timestamp.from(Instant.now()));
+        complaintRepository.save(newComplaint);
+
+        System.out.println("Đơn khiếu nại đã được gửi bởi người dùng ID: " + userId + ". Khiếu nại: '" + complaintText + "'. Đây sẽ được lưu vào cơ sở dữ liệu.");
+    }
+
+    @Transactional(readOnly = true) 
+    public List<Notification> getNotifications(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot retrieve notifications."));
+        return notificationRepository.findByUserOrderByCreatedAtDesc(user);
+    }
+
+    @Transactional
+    public void markNotificationRead(Integer userId, Long notificationId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot mark notification."));
+
+        Notification notification = notificationRepository.findById(notificationId)
+            .orElseThrow(() -> new EntityNotFoundException("Notification not found with ID: " + notificationId)); // Consider creating a specific NotificationNotFoundException
+
+        // Verify the notification belongs to the user
+        if (!notification.getUser().getUserId().equals(user.getUserId())) {
+            throw new SecurityException("User " + userId + " is not authorized to mark notification " + notificationId + " as read."); // Or a more specific access denied exception
+        }
+
+        if (!notification.isRead()) {
+            notification.setRead(true);
+            notificationRepository.save(notification);
+            System.out.println("Notification " + notificationId + " marked as read for user " + userId);
+        } else {
+            System.out.println("Notification " + notificationId + " was already marked as read for user " + userId);
+        }
+    }
+
+    @Transactional
+    public User updateUserForOAuth2(User user) {
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public User updateUserRole(Integer userId, RoleEnum newRole) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        
+        RoleEnum oldRole = user.getRole();
+        user.setRole(newRole);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        
+        User updatedUser = userRepository.save(user);
+        
+        // If user becomes a seller, send notification
+        if (newRole == RoleEnum.Seller && oldRole != RoleEnum.Seller) {
+            sendSellerRoleRequestNotification(updatedUser);
+        }
+        
+        return updatedUser;
+    }
+    
+    private void sendSellerRoleRequestNotification(User user) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Yêu cầu xác thực tài khoản người bán của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.");
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        notificationRepository.save(notification);
+        
+        log.info("Sent seller role request notification to user ID: {}", user.getUserId());
     }
 }

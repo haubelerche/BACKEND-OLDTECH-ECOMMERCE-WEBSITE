@@ -1,7 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 
 import java.sql.Timestamp;

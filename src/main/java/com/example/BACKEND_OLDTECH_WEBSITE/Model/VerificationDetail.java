@@ -1,7 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
+
 import lombok.*;
 
 import java.sql.Timestamp;
@@ -16,23 +16,30 @@ public class VerificationDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(columnDefinition = "INT UNSIGNED")
     private Integer verifyId;
 
-
-    private Integer userId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, columnDefinition = "INT UNSIGNED")
+    private User user;
 
     private Boolean isVerified;
 
-
-    private String nationalId;
+    private String selfiePicUrl;
 
     private String frontImageUrl;
 
     private String backImageUrl;
 
-    private Timestamp verifiedAt;
+    @Column(nullable = false, updatable = false)
+    @Builder.Default
+    private Timestamp createdAt = new Timestamp(System.currentTimeMillis());
 
-    private Timestamp createdAt;
+    @Builder.Default
+    private Timestamp updatedAt = new Timestamp(System.currentTimeMillis());
 
-    private Timestamp updatedAt;
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = new Timestamp(System.currentTimeMillis());
+    }
 }

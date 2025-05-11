@@ -19,10 +19,13 @@ public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(columnDefinition = "INT UNSIGNED")
     private Integer productId;
 
+    @Column(columnDefinition = "INT UNSIGNED")
     private Integer sellerId;
 
+    @Column(columnDefinition = "INT UNSIGNED")
     private Integer categoryId;
 
     private String name;
@@ -37,10 +40,10 @@ public class Product {
 
     private Timestamp createdAt;
 
-    private Timestamp listedAt;
-
     private Timestamp updatedAt;
 
-    private boolean isVisible = true;
-
+    @Builder.Default
+    @Column(name = "is_visible")
+    private Boolean isVisible = true; 
+    
 }

@@ -2,13 +2,16 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AuthProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.Email;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.format.annotation.DateTimeFormat;
+
+
 
 //import com.fasterxml.jackson.annotation.JsonFormat; if any1 ask how to change the day format
 import java.sql.Date;
@@ -24,10 +27,11 @@ public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id", columnDefinition = "INT UNSIGNED")
     private Integer userId;
 
     @NotBlank(message = "Bắt buộc nhập email")
-    @Email(message = "Sai định dạng email")
+    @Pattern(regexp = "^[A-Za-z0-9._%+-]+@gmail.com$", message = "Định dạng email không hợp lệ")
     @Column(unique = true)
     private String email;
 
@@ -47,6 +51,9 @@ public class User {
     @Column(name = "last_name")
     private String lastName;
 
+
+    @DateTimeFormat(pattern = "yyyy-MM-dd")
+    @Column(name = "dob")
     private Date dob;
 
     private String avatarUrl;
@@ -54,10 +61,12 @@ public class User {
     @Enumerated(EnumType.STRING)
     private RoleEnum role;
 
-    private String refundMomoAccount;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_status", nullable = false)
+    @Builder.Default
+    private AccountStatusEnum accountStatus = AccountStatusEnum.Active;
 
-    @Column(name = "is_active")
-    private Boolean isActive;
+    private String refundMomoAccount;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "auth_provider")
@@ -83,5 +92,11 @@ public class User {
 
     @Column(name = "last_login")
     private Timestamp lastLogin;
+
+    @Builder.Default
+    @Column(name = "is_verified", nullable = false)
+    private Boolean isVerified = false;
+
+
 
 }
