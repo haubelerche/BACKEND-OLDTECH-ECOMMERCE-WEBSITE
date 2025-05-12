@@ -1,21 +1,25 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.ProductImage;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductImageRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.ProductImage;
+
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductImageRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.SellerRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.sql.Timestamp;
-import java.time.Instant;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -23,26 +27,121 @@ public class ProductImageService {
 
     private final ProductImageRepository productImageRepository;
     private final ProductRepository productRepository;
+    private static final Logger log = LoggerFactory.getLogger(ProductImageService.class);
     private final String uploadDir = "uploads/products/";
     private final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
     private final int MIN_IMAGES_REQUIRED = 5;
     private final int MAX_IMAGES_ALLOWED = 10;
 
     @Autowired
-    public ProductImageService(ProductImageRepository productImageRepository, ProductRepository productRepository) {
+    public ProductImageService(ProductImageRepository productImageRepository, 
+                             ProductRepository productRepository) {
         this.productImageRepository = productImageRepository;
         this.productRepository = productRepository;
     }
 
+    @Transactional
+    public List<ProductImage> saveProductImages(Integer productId, List<String> imageUrls) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm với ID: " + productId));
+        
+        List<ProductImage> savedImages = new ArrayList<>();
+        
+        // Set the first image as primary if no primary image exists
+        boolean hasPrimary = productImageRepository.findByProductAndIsPrimaryTrue(product).isPresent();
+        
+        for (int i = 0; i < imageUrls.size(); i++) {
+            ProductImage image = new ProductImage();
+            image.setProduct(product);
+            image.setSeller(product.getSeller()); // Set seller from product
+            image.setImageUrl(imageUrls.get(i));
+            image.setDisplayOrder(i + 1);
+            
+            // Set the first image as primary if no primary exists
+            if (!hasPrimary && i == 0) {
+                image.setIsPrimary(true);
+                hasPrimary = true;
+            } else {
+                image.setIsPrimary(false);
+            }
+            
+            savedImages.add(productImageRepository.save(image));
+            log.info("Đã lưu ảnh cho sản phẩm ID: {}, URL: {}", productId, imageUrls.get(i));
+        }
+        
+        return savedImages;
+    }
+    
+    @Transactional(readOnly = true)
+    public List<ProductImage> getProductImages(Integer productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm với ID: " + productId));
+                
+        return productImageRepository.findByProductOrderByDisplayOrderAsc(product);
+    }
+    
+    @Transactional(readOnly = true)
+    public Optional<ProductImage> getPrimaryProductImage(Integer productId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm với ID: " + productId));
+                
+        return productImageRepository.findByProductAndIsPrimaryTrue(product);
+    }
+    
+    @Transactional
+    public ProductImage setPrimaryImage(Integer productId, Integer imageId) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm với ID: " + productId));
+        
+        ProductImage newPrimaryImage = productImageRepository.findById(imageId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy ảnh với ID: " + imageId));
+        
+        // Check if image belongs to product
+        if (!newPrimaryImage.getProduct().equals(product)) {
+            throw new IllegalArgumentException("Ảnh không thuộc về sản phẩm này");
+        }
+        
+        // Clear current primary image
+        productImageRepository.findByProductAndIsPrimaryTrue(product)
+                .ifPresent(image -> {
+                    image.setIsPrimary(false);
+                    productImageRepository.save(image);
+                });
+        
+        // Set new primary image
+        newPrimaryImage.setIsPrimary(true);
+        return productImageRepository.save(newPrimaryImage);
+    }
+    
+    @Transactional
+    public void deleteProductImage(Integer imageId) {
+        ProductImage image = productImageRepository.findById(imageId)
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy ảnh với ID: " + imageId));
+        
+        // If this is a primary image, try to set another image as primary
+        if (Boolean.TRUE.equals(image.getIsPrimary())) {
+            List<ProductImage> otherImages = productImageRepository.findByProductOrderByDisplayOrderAsc(image.getProduct());
+            
+            for (ProductImage otherImage : otherImages) {
+                if (!otherImage.getImageId().equals(imageId)) {
+                    otherImage.setIsPrimary(true);
+                    productImageRepository.save(otherImage);
+                    break;
+                }
+            }
+        }
+        
+        productImageRepository.delete(image);
+        log.info("Đã xóa ảnh với ID: {}", imageId);
+    }
 
     @Transactional
     public List<ProductImage> uploadProductImages(Integer productId, List<MultipartFile> files, Integer thumbnailIndex) 
             throws IllegalArgumentException, IOException {
         
         // Validate product exists
-        if (productId == null) {
-            throw new IllegalArgumentException("Product ID cannot be null");
-        }
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new IllegalArgumentException("Product not found with ID: " + productId));
         
         // Validate number of images
         if (files == null || files.size() < MIN_IMAGES_REQUIRED) {
@@ -79,15 +178,13 @@ public class ProductImageService {
             String filename = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
             String fileUrl = uploadDir + filename;
             
-            // TODO: Actual file saving logic (using cloud storage or local filesystem)
-            // For now, we'll just save the URL in the database
-            
-            // Create and save ProductImage entity
+       
             ProductImage productImage = new ProductImage();
-            productImage.setProductId(productId);
+            productImage.setProduct(product);
+            productImage.setSeller(product.getSeller());
             productImage.setImageUrl(fileUrl);
-            productImage.setIsThumbnail(i == thumbnailIndex);
-            productImage.setCreatedAt(Timestamp.from(Instant.now()));
+            productImage.setIsPrimary(i == thumbnailIndex);
+            productImage.setDisplayOrder(i + 1);
             
             savedImages.add(productImageRepository.save(productImage));
         }
@@ -95,66 +192,40 @@ public class ProductImageService {
         return savedImages;
     }
 
-    public List<ProductImage> getProductImages(Integer productId) {
-        return productImageRepository.findByProductId(productId);
-    }
-    
-
     public ProductImage getProductThumbnail(Integer productId) {
-        return productImageRepository.findByProductIdAndIsThumbnail(productId, true)
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + productId));
+        return productImageRepository.findByProductAndIsPrimaryTrue(product)
                 .orElseThrow(() -> new EntityNotFoundException("Thumbnail not found for product: " + productId));
     }
-    
-
-    @Transactional
-    public void deleteProductImage(Integer imageId) {
-        ProductImage image = productImageRepository.findById(imageId)
-                .orElseThrow(() -> new EntityNotFoundException("Image not found with ID: " + imageId));
-        
-        // Get product and check if it's approved
-        Product product = productRepository.findById(image.getProductId())
-                .orElseThrow(() -> new EntityNotFoundException("Product not found for image: " + imageId));
-        
-        // Check if product is approved or has approved status
-        if (Boolean.TRUE.equals(product.getIsApproved()) || 
-                product.getStatus() == ProductStatusEnum.Approved) {
-            throw new IllegalStateException("Cannot delete images from an approved product");
-        }
-        
-        // TODO: Delete actual file from storage
-        
-        productImageRepository.delete(image);
-    }
-    
-    /**
-     * Delete all images for a product if it's not approved
-     */
+ 
     @Transactional
     public void deleteAllProductImages(Integer productId) {
-        // Check if product is approved
+  
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + productId));
         
-        // Check if product is approved or has approved status
+
         if (Boolean.TRUE.equals(product.getIsApproved()) || 
                 product.getStatus() == ProductStatusEnum.Approved) {
             throw new IllegalStateException("Cannot delete images from an approved product");
         }
         
-        List<ProductImage> images = productImageRepository.findByProductId(productId);
+        List<ProductImage> images = productImageRepository.findByProductOrderByDisplayOrderAsc(product);
         
-        // TODO: Delete actual files from storage
+       
         
         productImageRepository.deleteAll(images);
     }
     
-
     @Transactional
     public void updateProductThumbnail(Integer productId, Integer imageId) {
-        // Reset all thumbnails for this product
-        List<ProductImage> images = productImageRepository.findByProductId(productId);
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + productId));
+       
+        List<ProductImage> images = productImageRepository.findByProductOrderByDisplayOrderAsc(product);
         for (ProductImage image : images) {
-            image.setIsThumbnail(false);
+            image.setIsPrimary(false);
             productImageRepository.save(image);
         }
         
@@ -162,11 +233,11 @@ public class ProductImageService {
         ProductImage newThumbnail = productImageRepository.findById(imageId)
                 .orElseThrow(() -> new EntityNotFoundException("Image not found with ID: " + imageId));
         
-        if (!newThumbnail.getProductId().equals(productId)) {
+        if (!newThumbnail.getProduct().equals(product)) {
             throw new IllegalArgumentException("Image does not belong to this product");
         }
         
-        newThumbnail.setIsThumbnail(true);
+        newThumbnail.setIsPrimary(true);
         productImageRepository.save(newThumbnail);
     }
 }

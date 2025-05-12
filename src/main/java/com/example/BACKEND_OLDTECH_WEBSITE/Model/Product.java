@@ -25,6 +25,10 @@ public class Product {
     @Column(columnDefinition = "INT UNSIGNED")
     private Integer sellerId;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "seller_id", insertable = false, updatable = false)
+    private Seller seller;
+
     @Column(columnDefinition = "INT UNSIGNED")
     private Integer categoryId;
 

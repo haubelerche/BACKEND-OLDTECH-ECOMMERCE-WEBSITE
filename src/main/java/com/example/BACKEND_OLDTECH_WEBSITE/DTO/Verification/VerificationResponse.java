@@ -8,10 +8,9 @@ public class VerificationResponse {
     private Integer verifyId;
     private Integer userId;
     private Boolean isVerified;
-    private String nationalId;
+    private String selfiePicUrl;
     private String frontImageUrl;
     private String backImageUrl;
-    private Timestamp verifiedAt;
     private Timestamp createdAt;
     private Timestamp updatedAt;
 }

@@ -1,6 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Verification.VerificationRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Verification.VerificationResponse;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.VerificationDetail;
@@ -44,13 +45,13 @@ public class VerificationService {
         VerificationDetail verificationDetail;
         if (existingDetailOpt.isPresent()) {
             verificationDetail = existingDetailOpt.get();
-            if (verificationDetail.getIsVerified() != null && !verificationDetail.getIsVerified() && !user.getIsVerified()) {
+            if (verificationDetail.getIsApproved() != null && !verificationDetail.getIsApproved() && !user.getIsVerified()) {
                 clearVerificationData(verificationDetail); // Removed note as it's not stored
             }
         } else {
             verificationDetail = VerificationDetail.builder()
                     .user(user)
-                    .isVerified(false) 
+                    .isApproved(false)
                     .createdAt(new Timestamp(System.currentTimeMillis()))
                     .build();
         }
@@ -64,7 +65,7 @@ public class VerificationService {
         vd.setSelfiePicUrl(null); // Changed from setNationalId
         vd.setFrontImageUrl(null);
         vd.setBackImageUrl(null);
-        vd.setIsVerified(false); 
+        vd.setIsApproved(false);
     }
 
     @Transactional
@@ -79,11 +80,11 @@ public class VerificationService {
         VerificationDetail verificationDetail = verificationDetailRepository.findByUser(user)
                 .orElseGet(() -> VerificationDetail.builder()
                                         .user(user)
-                                        .isVerified(false) 
+                                        .isApproved(false)
                                         .createdAt(new Timestamp(System.currentTimeMillis()))
                                         .build());
 
-        if (verificationDetail.getIsVerified() != null && verificationDetail.getIsVerified()) {
+        if (verificationDetail.getIsApproved() != null && verificationDetail.getIsApproved()) {
              throw new IllegalStateException("Thông tin đã được xác thực và được chấp nhận.");
         }
         
@@ -91,7 +92,7 @@ public class VerificationService {
         verificationDetail.setSelfiePicUrl(docsDto.getSelfiePicUrl());
         verificationDetail.setFrontImageUrl(docsDto.getFrontImageUrl());
         verificationDetail.setBackImageUrl(docsDto.getBackImageUrl());
-        verificationDetail.setIsVerified(false); 
+        verificationDetail.setIsApproved(false);
         verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
         
         System.out.println("Thông tin đã được gửi để xác thực danh tính và sẽ được duyệt sớm nhất có thể");
@@ -104,46 +105,52 @@ public class VerificationService {
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin xác thực mang ID này: " + verificationDetailId));
 
         User userToVerify = verificationDetail.getUser();
-        if (userToVerify.getIsVerified() && verificationDetail.getIsVerified() != null && verificationDetail.getIsVerified()) {
+        if (userToVerify.getIsVerified() && verificationDetail.getIsApproved() != null && verificationDetail.getIsApproved()) {
             throw new IllegalStateException("User ID: " + userToVerify.getUserId() + " đã được xác thực và thông tin này đã được chấp nhận.");
         }
-        if (verificationDetail.getSelfiePicUrl() == null || verificationDetail.getFrontImageUrl() == null || verificationDetail.getBackImageUrl() == null) { // Changed from getNationalId
+        if (verificationDetail.getSelfiePicUrl() == null || verificationDetail.getFrontImageUrl() == null || verificationDetail.getBackImageUrl() == null) {
              throw new IllegalStateException("Không thể chấp nhận xác thực danh tính cho User ID: " + userToVerify.getUserId() + " vì thông tin chưa được gửi đầy đủ trong thông tin này.");
         }
 
-        userToVerify.setIsVerified(true); 
+        // Update user verification status
+        userToVerify.setIsVerified(true);
         userRepository.save(userToVerify);
 
-        verificationDetail.setIsVerified(true); 
+        // Update verification detail
+        verificationDetail.setIsApproved(true);
         verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
         VerificationDetail savedDetail = verificationDetailRepository.save(verificationDetail);
-        sendNotification(userToVerify, "Congratulations! Your identity verification has been approved.");
+        
+        sendNotification(userToVerify, "Bravo! Yêu cầu xác thực danh tính của bạn đã được phê duyệt.");
         return savedDetail;
     }
 
     @Transactional
     public VerificationDetail rejectVerification(Integer verificationDetailId, Integer adminUserId, String reason) {
         VerificationDetail verificationDetail = verificationDetailRepository.findById(verificationDetailId)
-                .orElseThrow(() -> new EntityNotFoundException("VerificationDetail not found with ID: " + verificationDetailId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin xác thực mang ID này: " + verificationDetailId));
 
         User userToUpdate = verificationDetail.getUser();
-        if (verificationDetail.getSelfiePicUrl() == null || verificationDetail.getFrontImageUrl() == null || verificationDetail.getBackImageUrl() == null) { // Changed from getNationalId
-             throw new IllegalStateException("Cannot reject verification for User ID: " + userToUpdate.getUserId() + " as documents appear incomplete in this detail.");
+        if (verificationDetail.getSelfiePicUrl() == null || verificationDetail.getFrontImageUrl() == null || verificationDetail.getBackImageUrl() == null) {
+             throw new IllegalStateException("Từ chối xác thực cho User ID: " + userToUpdate.getUserId() + " vì thông tin chưa được gửi đầy đủ.");
         }
 
-        userToUpdate.setIsVerified(false); 
+        // Update user verification status
+        userToUpdate.setIsVerified(false);
         userRepository.save(userToUpdate);
 
-        verificationDetail.setIsVerified(false); 
+        // Update verification detail
+        verificationDetail.setIsApproved(false);
         verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
         VerificationDetail savedDetail = verificationDetailRepository.save(verificationDetail);
+        
         sendNotification(userToUpdate, "Hồ sơ xác thực của bạn đã bị từ chối. Lý do: " + reason + ". Vui lòng kiểm tra và gửi lại nếu cần thiết.");
         return savedDetail;
     }
 
     @Transactional(readOnly = true)
     public List<VerificationDetail> getPendingVerifications() {
-        return verificationDetailRepository.findBySelfiePicUrlIsNotNullAndFrontImageUrlIsNotNullAndBackImageUrlIsNotNullAndIsVerifiedFalseAndUser_IsVerifiedFalse(); // Updated method call
+        return verificationDetailRepository.findBySelfiePicUrlIsNotNullAndFrontImageUrlIsNotNullAndBackImageUrlIsNotNullAndIsApprovedFalseAndUser_IsVerifiedFalse(); // Updated method call
     }
 
     @Transactional(readOnly = true)
@@ -158,6 +165,32 @@ public class VerificationService {
         return verificationDetailRepository.findById(verificationDetailId);
     }
 
+    @Transactional(readOnly = true)
+    public VerificationResponse getVerificationResponseByUserId(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng mang ID này: " + userId));
+        
+        Optional<VerificationDetail> verificationDetailOpt = verificationDetailRepository.findByUser(user);
+        if (verificationDetailOpt.isPresent()) {
+            return mapToVerificationResponse(verificationDetailOpt.get());
+        }
+        
+        return null;
+    }
+    
+    public VerificationResponse mapToVerificationResponse(VerificationDetail detail) {
+        VerificationResponse response = new VerificationResponse();
+        response.setVerifyId(detail.getVerifyId());
+        response.setUserId(detail.getUser().getUserId());
+        response.setIsVerified(detail.getIsApproved());
+        response.setSelfiePicUrl(detail.getSelfiePicUrl());
+        response.setFrontImageUrl(detail.getFrontImageUrl());
+        response.setBackImageUrl(detail.getBackImageUrl());
+        response.setCreatedAt(detail.getCreatedAt());
+        response.setUpdatedAt(detail.getUpdatedAt());
+        return response;
+    }
+
     private void sendNotification(User user, String message) {
         if (user != null && message != null && !message.isEmpty()) {
             Notification notification = new Notification(user, message);
@@ -166,5 +199,23 @@ public class VerificationService {
         } else {
             System.out.println("Không thể gửi thông báo: user hoặc thông báo rỗng.");
         }
+    }
+
+    @Transactional
+    public VerificationDetail reviewVerification(Integer verificationDetailId, boolean isVerified, String reason, Integer adminUserId) {
+        VerificationDetail verificationDetail = verificationDetailRepository.findById(verificationDetailId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin xác thực mang ID này: " + verificationDetailId));
+        User user = verificationDetail.getUser();
+        verificationDetail.setIsApproved(isVerified);
+        verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+        verificationDetailRepository.save(verificationDetail);
+        user.setIsVerified(isVerified);
+        userRepository.save(user);
+        if (isVerified) {
+            sendNotification(user, "Bravo! Yêu cầu xác thực danh tính của bạn đã được phê duyệt.");
+        } else {
+            sendNotification(user, "Hồ sơ xác thực của bạn đã bị từ chối. Lý do: " + (reason != null ? reason : "Không đáp ứng yêu cầu của hệ thống") + ". Vui lòng kiểm tra và gửi lại nếu cần thiết.");
+        }
+        return verificationDetail;
     }
 }

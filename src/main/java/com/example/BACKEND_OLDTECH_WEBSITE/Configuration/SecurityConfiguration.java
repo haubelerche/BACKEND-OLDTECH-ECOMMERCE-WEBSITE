@@ -39,19 +39,27 @@ public class SecurityConfiguration {
                 .requestMatchers(
                         "/auth/**",
                         "/oauth2/**",
-                        "/test/**"
+                        "/test/**",
+                        "/mng/superadmin/**",                
+                        "/customer/public/**",
+                        "/customer/profile/**",           
+                        "/customer/{userId}",             
+                        "/customer/search/{name}",
+                        "/admin/public/**",
+                        "/admin/**",
+                        "/customer/**",
+                        "/customer/public/**",
+                        "/seller/**",
+                        "/sellers/**",  // Explicitly added mapping for sellers endpoint
+                        "/seller/public/**",
+                        "/superadmin/**",
+                        "/superadmin/public/**"       
                 ).permitAll()
-                .requestMatchers("/admin/**").hasRole("Admin")
-                .requestMatchers("/customer/**").hasRole("Customer")
-                .requestMatchers("/seller/**").hasRole("Seller")
-                .requestMatchers("/superadmin/**").hasRole("SuperAdmin")
-                .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-
 
         return http.build();
     }

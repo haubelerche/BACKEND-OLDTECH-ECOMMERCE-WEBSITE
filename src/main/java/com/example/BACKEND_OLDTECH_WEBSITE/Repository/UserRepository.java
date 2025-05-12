@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
+import java.util.List;
 
 @Repository
 public interface UserRepository extends JpaRepository<User, Integer> {
@@ -12,6 +13,11 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     boolean existsByPhoneNumber(String phoneNumber);
     User findByPhoneNumber(String phoneNumber);
-
-
+    
+    // Search methods
+    List<User> findByEmailContainingIgnoreCase(String email);
+    List<User> findByPhoneNumberContaining(String phoneNumber);
+    
+    // Additional search methods
+    List<User> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);
 }

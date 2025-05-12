@@ -2,6 +2,7 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateAdminRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AuthProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.UserRepository;
@@ -52,7 +53,9 @@ public class SuperAdminService {
         admin.setIsVerified(true);
         admin.setCreatedAt(Timestamp.from(Instant.now()));
         admin.setUpdatedAt(Timestamp.from(Instant.now()));
-
+        
+        // Set auth provider to local
+        admin.setAuthProvider(AuthProvider.local);
 
         return userRepository.save(admin);
     }

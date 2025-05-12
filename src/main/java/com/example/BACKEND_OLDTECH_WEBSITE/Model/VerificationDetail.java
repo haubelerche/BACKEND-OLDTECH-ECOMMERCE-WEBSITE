@@ -16,25 +16,30 @@ public class VerificationDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(columnDefinition = "INT UNSIGNED")
+    @Column(name = "verify_id", columnDefinition = "INT UNSIGNED")
     private Integer verifyId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false, columnDefinition = "INT UNSIGNED")
     private User user;
 
-    private Boolean isVerified;
+    @Column(name = "is_approved")
+    private Boolean isApproved;
 
+    @Column(name = "selfie_pic_url")
     private String selfiePicUrl;
 
+    @Column(name = "front_image_url")
     private String frontImageUrl;
 
+    @Column(name = "back_image_url")
     private String backImageUrl;
 
-    @Column(nullable = false, updatable = false)
+    @Column(name = "created_at", nullable = false, updatable = false)
     @Builder.Default
     private Timestamp createdAt = new Timestamp(System.currentTimeMillis());
 
+    @Column(name = "updated_at")
     @Builder.Default
     private Timestamp updatedAt = new Timestamp(System.currentTimeMillis());
 

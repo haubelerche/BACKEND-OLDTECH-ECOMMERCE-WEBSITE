@@ -99,6 +99,35 @@ public class AdminService {
     }
 
     @Transactional
+    public void deleteUserAccount(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        System.out.println("Starting deletion process for user ID: " + userId);
+
+        // Anonymize the User entity
+        user.setAccountStatus(AccountStatusEnum.Deleted);
+        user.setEmail("deleted_" + userId + "@anonymized.com");
+        user.setPhoneNumber(null);
+        user.setFirstName("Deleted");
+        user.setLastName("User");
+        user.setPassword(null);
+        user.setAvatarUrl(null);
+        user.setRefundMomoAccount(null);
+        user.setAuthProvider(null);
+        user.setAuthProviderId(null);
+        user.setAuthProviderToken(null);
+        user.setAuthProviderRefreshToken(null);
+        user.setAuthProviderTokenExpires(null);
+        user.setRole(RoleEnum.Customer);
+        user.setIsVerified(false);
+        user.setUpdatedAt(new java.sql.Timestamp(System.currentTimeMillis()));
+
+        userRepository.save(user);
+        System.out.println("User account " + userId + " has been successfully anonymized and marked as Deleted.");
+    }
+
+    @Transactional
     public boolean setUserRole(int userId, String roleString) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User not found with ID: " + userId));
@@ -355,6 +384,14 @@ public boolean hideProduct(int productId) {
         System.out.println("Đã lấy dữ liệu lượt truy cập trang web.");
         return trafficData;
     }*/
+
+    @Transactional
+    public void setUserVerifiedStatus(Integer userId, boolean isVerified) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        user.setIsVerified(isVerified);
+        userRepository.save(user);
+    }
 }
 
 //verify user

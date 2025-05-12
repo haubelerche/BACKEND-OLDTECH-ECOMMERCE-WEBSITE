@@ -24,16 +24,22 @@ public class Address {
 
     private String ward;
 
+    @Column(name = "street")
     private String street;
 
+    @Column(name = "detailed_address")
     private String detailedAddress;
 
+    @Column(name = "address_type")
     private AddressTypeEnum addressType;
 
+    @Column(name = "is_default")
     private Boolean isDefault;
 
+    @Column(name = "created_at")
     private Timestamp createdAt;
 
+    @Column(name = "updated_at")
     private Timestamp updatedAt;
     
     @ManyToOne(fetch = FetchType.LAZY)

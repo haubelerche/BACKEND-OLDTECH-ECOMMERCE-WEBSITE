@@ -1,5 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import lombok.Data;
 
 import java.sql.Timestamp;
@@ -8,7 +9,9 @@ import java.sql.Timestamp;
 public class SellerRegisterResponse {
     private Integer sellerId;
     private String momoAccount;
-    private String account_status;
-    private Timestamp created_at;
-    private Timestamp updated_at;
+    private Boolean isApproved;
+    private AccountStatusEnum accountStatus;
+    private Byte businessStatus;
+    private Timestamp createdAt;
+    private Timestamp updatedAt;
 }

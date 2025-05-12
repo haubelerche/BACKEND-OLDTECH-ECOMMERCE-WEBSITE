@@ -373,19 +373,214 @@ public class SellerService {
         return true;
     }
     
-  
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public Seller requestToBecomeSeller(Integer userId, String momoAccount) {
+        System.out.println("requestToBecomeSeller called with userId: " + userId + ", momoAccount: " + momoAccount);
+        
+        try {
+            // Find the user
+            User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+            
+            System.out.println("User found: " + user.getUserId() + ", role: " + user.getRole());
+            
+            // Check if user is already a seller
+            if (user.getRole() == RoleEnum.Seller) {
+                System.out.println("User is already a seller");
+                throw new IllegalStateException("Người dùng này đã là người bán hàng.");
+            }
+            
+            // Check if user is a customer
+            if (user.getRole() != RoleEnum.Customer) {
+                System.out.println("User is not a customer but: " + user.getRole());
+                throw new SecurityException("Chỉ có khách hàng mới có thể đăng ký làm người bán. Vai trò hiện tại: " + user.getRole());
+            }
+            
+            // Validate momo account
+            if (momoAccount == null || momoAccount.trim().isEmpty()) {
+                System.out.println("Momo account is empty");
+                throw new IllegalArgumentException("Tài khoản Momo không được để trống");
+            }
+            
+            if (momoAccount.length() < 8) {
+                System.out.println("Momo account is too short: " + momoAccount.length());
+                throw new IllegalArgumentException("Tài khoản Momo phải có ít nhất 8 ký tự");
+            }
 
-
-
-
-
-
-
-
-
-
-
-
-
+            // Get EntityManager from repository
+            jakarta.persistence.EntityManager em = sellerRepository.getEntityManager();
+            
+            // Check if seller record exists using native query
+            Long count = (Long) em.createNativeQuery(
+                "SELECT COUNT(*) FROM seller WHERE seller_id = ?")
+                .setParameter(1, userId)
+                .getSingleResult();
+            
+            // If record exists, delete it
+            if (count > 0) {
+                em.createNativeQuery("DELETE FROM seller WHERE seller_id = ?")
+                    .setParameter(1, userId)
+                    .executeUpdate();
+                System.out.println("Deleted existing seller record(s) for userId: " + userId);
+            }
+            
+            // Create a new seller record
+            java.sql.Timestamp now = new java.sql.Timestamp(System.currentTimeMillis());
+            
+            em.createNativeQuery(
+                "INSERT INTO seller (seller_id, momo_account, is_approved, account_status, created_at, updated_at, business_status) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?)")
+                .setParameter(1, userId)
+                .setParameter(2, momoAccount)
+                .setParameter(3, false) // not approved
+                .setParameter(4, AccountStatusEnum.Inactive.toString())
+                .setParameter(5, now)
+                .setParameter(6, now)
+                .setParameter(7, (byte)0)
+                .executeUpdate();
+            
+            // Build and return the seller object
+            Seller newSeller = new Seller();
+            newSeller.setSellerId(userId);
+            newSeller.setMomoAccount(momoAccount);
+            newSeller.setIsApproved(false);
+            newSeller.setAccountStatus(AccountStatusEnum.Inactive);
+            newSeller.setCreatedAt(now);
+            newSeller.setUpdatedAt(now);
+            newSeller.setBusinessStatus((byte)0);
+            
+            System.out.println("New seller record created: " + newSeller.getSellerId());
+            return newSeller;
+            
+        } catch (Exception e) {
+            System.out.println("Exception in requestToBecomeSeller: " + e.getClass().getName() + ": " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
+    }
     
+    @Transactional(readOnly = true)
+    public List<Seller> getPendingSellerRequests() {
+        return sellerRepository.findByIsApproved(false);
+    }
+    
+    @Transactional
+    public Seller approveSellerRequest(Integer sellerId, Integer adminUserId) {
+        Seller seller = sellerRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy yêu cầu người bán với ID: " + sellerId));
+        
+        if (seller.getIsApproved()) {
+            throw new IllegalStateException("Yêu cầu người bán này đã được duyệt trước đó.");
+        }
+        
+        // Update seller record
+        seller.setIsApproved(true);
+        seller.setAccountStatus(AccountStatusEnum.Active);
+        seller.setApprovedAt(new Timestamp(System.currentTimeMillis()));
+        seller.setBusinessStatus((byte)1); // Active
+        seller.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+        
+        // Update user role
+        User user = userRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + sellerId));
+        user.setRole(RoleEnum.Seller);
+        userRepository.save(user);
+        
+        System.out.println("Yêu cầu người bán " + sellerId + " đã được phê duyệt bởi admin " + adminUserId);
+        
+        return sellerRepository.save(seller);
+    }
+    
+    @Transactional
+    public Seller rejectSellerRequest(Integer sellerId, Integer adminUserId, String reason) {
+        Seller seller = sellerRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy yêu cầu người bán với ID: " + sellerId));
+        
+        if (seller.getIsApproved()) {
+            throw new IllegalStateException("Yêu cầu người bán này đã được duyệt trước đó và không thể bị từ chối.");
+        }
+        
+        // Update seller record
+        seller.setAccountStatus(AccountStatusEnum.Inactive); // Using Inactive instead of Rejected
+        seller.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+        
+        System.out.println("Yêu cầu người bán " + sellerId + " đã bị từ chối bởi admin " + adminUserId + ". Lý do: " + reason);
+        
+        return sellerRepository.save(seller);
+    }
+
+    /**
+     * Updates the business status of a seller and their account status accordingly.
+     * This method replaces the previous toggleSellingActive and updateBusinessStatus methods.
+     * 
+     * @param sellerId The ID of the seller to update
+     * @param isActive Whether the seller should be active or not (can be boolean or byte)
+     * @return The updated User entity, or null if only the Seller entity was updated
+     */
+    @Transactional
+    public User updateSellerStatus(Integer sellerId, Object isActive) {
+        // Convert input parameter to byte value
+        byte newBusinessStatus;
+        boolean makeActive;
+        
+        if (isActive instanceof Boolean) {
+            makeActive = (Boolean) isActive;
+            newBusinessStatus = makeActive ? (byte)1 : (byte)0;
+        } else if (isActive instanceof Byte) {
+            newBusinessStatus = (Byte) isActive;
+            makeActive = newBusinessStatus == 1;
+        } else {
+            throw new IllegalArgumentException("Tham số trạng thái phải là Boolean hoặc Byte");
+        }
+
+        // Find both user and seller entities
+        User user = userRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + sellerId));
+            
+        Seller seller = sellerRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin người bán với ID: " + sellerId));
+        
+        // Validate the user has seller role
+        if (user.getRole() != RoleEnum.Seller && user.getRole() != RoleEnum.Admin) {
+            throw new SecurityException("Người dùng với ID: " + sellerId + " không phải là người bán.");
+        }
+        
+        // Set the new status
+        AccountStatusEnum newStatus = makeActive ? AccountStatusEnum.Active : AccountStatusEnum.Inactive;
+        
+        // If active requested but seller not approved, prevent activation
+        if (makeActive && !seller.getIsApproved()) {
+            throw new IllegalStateException("Không thể kích hoạt người bán chưa được duyệt");
+        }
+        
+        // Check if status isn't changing
+        if (user.getAccountStatus() == newStatus && seller.getBusinessStatus() == newBusinessStatus) {
+            System.out.println("Người bán " + sellerId + " đã có trạng thái " + newStatus + ". Không thực hiện thay đổi.");
+            return user;
+        }
+        
+        // Update the user entity
+        user.setAccountStatus(newStatus);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        
+        // Update the seller entity
+        seller.setAccountStatus(newStatus);
+        seller.setBusinessStatus(newBusinessStatus);
+        seller.setUpdatedAt(Timestamp.from(Instant.now()));
+        
+        // If making inactive, hide all products
+        if (!makeActive) {
+            System.out.println("Trạng thái tài khoản người bán " + sellerId + " đã được đặt thành " + newStatus + ", nên sản phẩm sẽ bị ẩn.");
+            productRepository.findBySellerId(sellerId).forEach(p -> {
+                p.setIsVisible(false);
+                productRepository.save(p);
+            });
+        } else {
+            System.out.println("Người bán " + sellerId + " đã được kích hoạt.");
+        }
+        
+        // Save both entities
+        sellerRepository.save(seller);
+        return userRepository.save(user);
+    }
 }

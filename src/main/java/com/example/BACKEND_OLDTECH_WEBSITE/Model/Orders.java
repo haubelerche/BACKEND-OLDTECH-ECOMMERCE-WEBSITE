@@ -21,6 +21,7 @@ public class Orders {
     @Column(name = "order_id", columnDefinition = "INT UNSIGNED")
     private Integer orderId;
     
+    @Column(name = "order_time")
     private Timestamp orderTime;
 
     @Column(name = "user_id", columnDefinition = "INT UNSIGNED")
@@ -29,16 +30,23 @@ public class Orders {
     @Column(name = "shipping_address_id", columnDefinition = "INT UNSIGNED")
     private Integer shippingAddressId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method")
     private PaymentMethodEnum paymentMethod;
 
+    @Column(name = "total_amount")
     private BigDecimal totalAmount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
     private OrderStatusEnum status;
 
     private String notes;
 
+    @Column(name = "created_at")
     private Timestamp createdAt;
 
+    @Column(name = "updated_at")
     private Timestamp updatedAt;
     
     @ManyToOne(fetch = FetchType.LAZY)

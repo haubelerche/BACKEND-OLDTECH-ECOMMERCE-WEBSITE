@@ -1,11 +1,14 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller.SellerRegisterRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller.SellerRegisterResponse;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.ProductImage;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.SellerService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.ProductImageService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
@@ -163,14 +166,28 @@ public class SellerController {
 
     // Account Management Endpoints
     @PutMapping("/{sellerId}/status")
-    public ResponseEntity<?> toggleSellingActive(@PathVariable Integer sellerId, @RequestParam boolean active) {
+    public ResponseEntity<?> updateSellerStatus(@PathVariable Integer sellerId, @RequestParam(required = false) Boolean active, @RequestParam(required = false) Byte status) {
         try {
-            User user = sellerService.toggleSellingActive(sellerId, active);
+            // Determine which parameter to use (prioritize active if both are provided)
+            Object activeStatus;
+            if (active != null) {
+                activeStatus = active;
+            } else if (status != null) {
+                activeStatus = status;
+            } else {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Phải cung cấp tham số 'active' hoặc 'status'");
+            }
+            
+            User user = sellerService.updateSellerStatus(sellerId, activeStatus);
             return ResponseEntity.ok(user);
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật trạng thái người bán: " + e.getMessage());
         }
@@ -346,6 +363,94 @@ public class SellerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi khi xóa hình ảnh sản phẩm: " + e.getMessage());
+        }
+    }
+
+    // Seller Application Endpoints
+    @PostMapping("/apply")
+    public ResponseEntity<?> applyToBecomeSeller(@RequestBody SellerRegisterRequest request) {
+        try {
+            if (request.getMomoAccount() == null || request.getMomoAccount().trim().isEmpty()) {
+                System.out.println("DEBUG - Momo account is empty in request");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Tài khoản Momo không được để trống");
+            }
+            
+            Integer userId = request.getUserId();
+            if (userId == null) {
+                System.out.println("DEBUG - UserId is null in request");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("ID người dùng không được để trống");
+            }
+            
+            System.out.println("DEBUG - Calling sellerService.requestToBecomeSeller with userId: " + userId);
+            Seller seller = sellerService.requestToBecomeSeller(userId, request.getMomoAccount());
+            
+            SellerRegisterResponse response = new SellerRegisterResponse();
+            response.setSellerId(seller.getSellerId());
+            response.setMomoAccount(seller.getMomoAccount());
+            response.setIsApproved(seller.getIsApproved());
+            response.setAccountStatus(seller.getAccountStatus());
+            response.setBusinessStatus(seller.getBusinessStatus());
+            response.setCreatedAt(seller.getCreatedAt());
+            response.setUpdatedAt(seller.getUpdatedAt());
+            
+            System.out.println("DEBUG - Successfully created seller application: " + response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (EntityNotFoundException e) {
+            System.out.println("DEBUG - EntityNotFoundException: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (IllegalStateException e) {
+            System.out.println("DEBUG - IllegalStateException: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (SecurityException e) {
+            System.out.println("DEBUG - SecurityException: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (IllegalArgumentException e) {
+            System.out.println("DEBUG - IllegalArgumentException: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (org.springframework.dao.OptimisticLockingFailureException e) {
+            System.out.println("DEBUG - Optimistic locking exception: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body("Yêu cầu đăng ký người bán đang được xử lý. Vui lòng thử lại sau ít phút.");
+        } catch (Exception e) {
+            System.out.println("DEBUG - Unexpected exception: " + e.getClass().getName() + ": " + e.getMessage());
+            e.printStackTrace();
+            
+            // Check for SQL exceptions that might be nested
+            Throwable cause = e.getCause();
+            if (cause instanceof java.sql.SQLException) {
+                java.sql.SQLException sqlEx = (java.sql.SQLException) cause;
+                System.out.println("DEBUG - SQL Exception: " + sqlEx.getMessage() + 
+                        ", SQLState: " + sqlEx.getSQLState() + 
+                        ", ErrorCode: " + sqlEx.getErrorCode());
+                
+                // Check for duplicate key violation
+                if (sqlEx.getErrorCode() == 1062 || (sqlEx.getSQLState() != null && sqlEx.getSQLState().equals("23000"))) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body("Đã có yêu cầu đăng ký cho người dùng này. Vui lòng thử lại sau.");
+                }
+                
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Lỗi cơ sở dữ liệu khi đăng ký: " + sqlEx.getMessage());
+            }
+            
+            // Check if it's a transaction-related exception 
+            if (e.getMessage() != null && (
+                e.getMessage().contains("Row was updated or deleted by another transaction") ||
+                e.getMessage().contains("could not execute statement") ||
+                e.getMessage().contains("ConstraintViolationException") ||
+                e.getMessage().contains("Duplicate entry"))) {
+                
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body("Hệ thống đang xử lý nhiều yêu cầu. Vui lòng thử lại sau ít phút.");
+            }
+            
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Lỗi khi đăng ký làm người bán: " + e.getMessage());
         }
     }
 }

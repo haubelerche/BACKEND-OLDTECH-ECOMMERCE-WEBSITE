@@ -8,13 +8,11 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatus;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Complaint;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.UserRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ComplaintRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.NotificationRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.*;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.*;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Verification.VerificationRequest;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -27,10 +25,16 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.PersistenceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.HashMap;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -38,14 +42,31 @@ public class UserService implements UserDetailsService {
     private final PasswordEncoder passwordEncoder;
     private final ComplaintRepository complaintRepository;
     private final NotificationRepository notificationRepository;
+    private final VerificationDetailRepository verificationDetailRepository;
+    private final AddressRepository addressRepository;
+    private final OrderRepository orderRepository;
+    private final RefundRepository refundRepository;
+    private final SellerRepository sellerRepository;
+    private final ProductRepository productRepository;
+    private final ProductImageRepository productImageRepository;
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
+    @PersistenceContext
+    private EntityManager entityManager;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, ComplaintRepository complaintRepository, NotificationRepository notificationRepository) {
+    @Autowired
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, ComplaintRepository complaintRepository, NotificationRepository notificationRepository, VerificationDetailRepository verificationDetailRepository, AddressRepository addressRepository, OrderRepository orderRepository, RefundRepository refundRepository, SellerRepository sellerRepository, ProductRepository productRepository, ProductImageRepository productImageRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.complaintRepository = complaintRepository;
         this.notificationRepository = notificationRepository;
+        this.verificationDetailRepository = verificationDetailRepository;
+        this.addressRepository = addressRepository;
+        this.orderRepository = orderRepository;
+        this.refundRepository = refundRepository;
+        this.sellerRepository = sellerRepository;
+        this.productRepository = productRepository;
+        this.productImageRepository = productImageRepository;
     }
 
     public boolean existsByEmail(String email) {
@@ -266,6 +287,19 @@ public class UserService implements UserDetailsService {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
     }
+    
+    public User getUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
+    }
+    
+    public User getUserByPhoneNumber(String phoneNumber) {
+        User user = userRepository.findByPhoneNumber(phoneNumber);
+        if (user == null) {
+            throw new UsernameNotFoundException("Không tìm thấy người dùng với số điện thoại: " + phoneNumber);
+        }
+        return user;
+    }
 
     @Transactional
     public void deactivateAccount(Integer userId) {
@@ -274,6 +308,126 @@ public class UserService implements UserDetailsService {
         user.setAccountStatus(AccountStatusEnum.Inactive);
         user.setUpdatedAt(Timestamp.from(Instant.now())); 
         userRepository.save(user);
+    }
+    
+    @Transactional
+    public void deleteAccount(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        log.info("Starting deletion process for user ID: {}", userId);
+
+        // --- Delete dependent entities FIRST --- 
+        try {
+            // Notifications
+            List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
+            if (!notifications.isEmpty()) {
+                notificationRepository.deleteAll(notifications);
+                log.info("Deleted {} notifications for user {}", notifications.size(), userId);
+            }
+
+            // Complaints (as complainant)
+            List<Complaint> complaintsAsComplainant = complaintRepository.findByComplainantId(userId);
+            if (!complaintsAsComplainant.isEmpty()) {
+                complaintRepository.deleteAll(complaintsAsComplainant);
+                log.info("Deleted {} complaints (as complainant) for user {}", complaintsAsComplainant.size(), userId);
+            }
+            // Consider handling complaints where user is respondent if necessary
+            // List<Complaint> complaintsAsRespondent = complaintRepository.findByRespondentId(userId);
+            // handle complaintsAsRespondent...
+
+            // Verification Details
+            verificationDetailRepository.findByUser(user).ifPresent(detail -> {
+                verificationDetailRepository.delete(detail);
+                log.info("Deleted verification details for user {}", userId);
+            });
+
+            // Addresses
+            List<Address> addresses = addressRepository.findByUserId(userId); 
+            if (!addresses.isEmpty()) {
+                addressRepository.deleteAll(addresses);
+                log.info("Deleted {} addresses for user {}", addresses.size(), userId);
+            }
+
+            // Orders
+            List<Orders> orders = orderRepository.findByUserId(userId);
+            if (!orders.isEmpty()) {
+                 // Assuming OrderDetail is handled by cascade or is deleted here if needed
+                 orderRepository.deleteAll(orders); 
+                 log.info("Deleted {} orders for user {}", orders.size(), userId);
+            }
+
+            // Refunds
+            List<Refund> refunds = refundRepository.findByUserId(userId);
+            if (!refunds.isEmpty()) {
+                refundRepository.deleteAll(refunds);
+                log.info("Deleted {} refunds for user {}", refunds.size(), userId);
+            }
+            
+            // --- Handle Seller related data --- 
+            if (user.getRole() == RoleEnum.Seller) {
+                 log.info("User {} is a seller. Proceeding with seller data cleanup.", userId);
+                 
+                 // Find seller record (assuming sellerId = userId)
+                 Optional<Seller> sellerOpt = sellerRepository.findById(userId);
+                 if (sellerOpt.isPresent()) {
+                     Seller seller = sellerOpt.get();
+                     Integer sellerId = seller.getSellerId();
+                     
+                     // Find and delete Products associated with this seller
+                     List<Product> products = productRepository.findBySellerId(sellerId);
+                     if (!products.isEmpty()) {
+                         log.info("Found {} products for seller ID {}. Deleting products and their images.", products.size(), sellerId);
+                         for (Product product : products) {
+                             // Delete Product Images first
+                             List<ProductImage> productImages = productImageRepository.findByProductOrderByDisplayOrderAsc(product);
+                             if (!productImages.isEmpty()) {
+                                 // TODO: Add logic here to delete images from storage (S3, local, etc.)
+                                 productImageRepository.deleteAll(productImages);
+                                 log.info("Deleted {} images for product ID {}", productImages.size(), product.getProductId());
+                             }
+                             // Delete Product
+                             productRepository.delete(product);
+                         }
+                         log.info("Finished deleting products for seller ID {}", sellerId);
+                     }
+                     
+                     // TODO: Delete Reviews where this seller is the sellerId if necessary
+                     
+                     // Delete the Seller record itself
+                     sellerRepository.delete(seller);
+                     log.info("Deleted seller record for seller ID {}", sellerId);
+                 } else {
+                     log.warn("User {} has Seller role but no corresponding Seller record found with ID {}. Skipping seller cleanup.", userId, userId);
+                 }
+            }
+
+            // --- Anonymize the User entity LAST --- 
+            user.setAccountStatus(AccountStatusEnum.Deleted);
+            user.setEmail("deleted_" + userId + "@anonymized.com");
+            user.setPhoneNumber(null);
+            user.setFirstName("Deleted");
+            user.setLastName("User");
+            user.setPassword(null); // Consider security implications
+            user.setAvatarUrl(null);
+            user.setRefundMomoAccount(null);
+            user.setAuthProvider(null);
+            user.setAuthProviderId(null);
+            user.setAuthProviderToken(null);
+            user.setAuthProviderRefreshToken(null);
+            user.setAuthProviderTokenExpires(null);
+            user.setRole(RoleEnum.Customer); // Reset role?
+            user.setIsVerified(false);
+            user.setUpdatedAt(Timestamp.from(Instant.now()));
+
+            userRepository.save(user);
+            log.info("User account {} has been successfully anonymized and marked as Deleted.", userId);
+
+        } catch (Exception e) {
+            log.error("Error during deletion process for user account {}: {}", userId, e.getMessage(), e);
+            // Let Spring handle rollback due to @Transactional
+            throw new RuntimeException("Lỗi khi xóa tài khoản: " + e.getMessage(), e);
+        }
     }
 
     @Transactional
@@ -448,5 +602,97 @@ public class UserService implements UserDetailsService {
         notificationRepository.save(notification);
         
         log.info("Sent seller role request notification to user ID: {}", user.getUserId());
+    }
+
+    // Add this method to get all users
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
+    }
+
+    // Search methods
+    public List<User> searchUsersByEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return userRepository.findByEmailContainingIgnoreCase(email);
+    }
+    
+    public List<User> searchUsersByPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return userRepository.findByPhoneNumberContaining(phoneNumber);
+    }
+    
+    public List<User> searchUsersByName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return userRepository.findAll();
+        }
+        
+        return userRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(name, name);
+    }
+
+    @Transactional
+    public VerificationDetail submitVerificationDocuments(Integer userId, VerificationRequest verificationRequest) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        if (user.getIsVerified()) {
+            throw new IllegalStateException("Người dùng đã được xác thực trước đó.");
+        }
+
+        VerificationDetail verificationDetail = verificationDetailRepository.findByUser(user)
+                .orElseGet(() -> VerificationDetail.builder()
+                        .user(user)
+                        .isApproved(false)
+                        .build());
+
+        // Update verification details with the documents provided
+        verificationDetail.setSelfiePicUrl(verificationRequest.getSelfiePicUrl());
+        verificationDetail.setFrontImageUrl(verificationRequest.getFrontImageUrl());
+        verificationDetail.setBackImageUrl(verificationRequest.getBackImageUrl());
+        verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
+        // Save the verification details
+        VerificationDetail savedDetail = verificationDetailRepository.save(verificationDetail);
+
+        // Send notification to admin about new verification request
+        sendVerificationRequestSubmittedNotification(user);
+
+        log.info("Đã gửi tài liệu xác thực cho người dùng ID: {}", userId);
+        return savedDetail;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getVerificationStatus(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        Map<String, Object> statusInfo = new HashMap<>();
+        statusInfo.put("isVerified", user.getIsVerified());
+
+        // Get verification detail if exists
+        verificationDetailRepository.findByUser(user).ifPresent(detail -> {
+            statusInfo.put("verificationDetailId", detail.getVerifyId());
+            statusInfo.put("documentSubmitted", detail.getSelfiePicUrl() != null && 
+                                               detail.getFrontImageUrl() != null && 
+                                               detail.getBackImageUrl() != null);
+            statusInfo.put("updatedAt", detail.getUpdatedAt());
+            statusInfo.put("createdAt", detail.getCreatedAt());
+        });
+
+        return statusInfo;
+    }
+
+    @Transactional
+    public void updateProfilePicture(Integer userId, String imageUrl) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        
+        user.setAvatarUrl(imageUrl);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+        
+        log.info("Đã cập nhật ảnh đại diện cho người dùng ID: {}", userId);
     }
 }
