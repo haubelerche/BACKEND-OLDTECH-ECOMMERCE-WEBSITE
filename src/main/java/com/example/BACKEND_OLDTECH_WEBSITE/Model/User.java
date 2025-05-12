@@ -40,7 +40,7 @@ public class User {
 
     @NotBlank(message = "Bắt buộc nhập số điện thoại")
     @Pattern(regexp = "^\\+?[0-9]{10,15}$", message = "Sai định dạng số điện thoại")
-    @Column(unique = true)
+    @Column(name = "phone_number", unique = true)
     private String phoneNumber;
 
     @NotBlank(message = "Bắt buộc nhập tên")
@@ -56,6 +56,7 @@ public class User {
     @Column(name = "dob")
     private Date dob;
 
+    @Column(name = "avatar_url")
     private String avatarUrl;
 
     @Enumerated(EnumType.STRING)
@@ -66,6 +67,7 @@ public class User {
     @Builder.Default
     private AccountStatusEnum accountStatus = AccountStatusEnum.Active;
 
+    @Column(name = "refund_momo_account")
     private String refundMomoAccount;
 
     @Enumerated(EnumType.STRING)

@@ -14,14 +14,20 @@ public class AgeRestrictionValidator implements ConstraintValidator<AgeRestricti
 
     @Override
     public boolean isValid(Date dob, ConstraintValidatorContext context) {
-        if (dob == null) {
+        try {
+            if (dob == null) {
+                return false;
+            }
+
+            LocalDate birthDate = dob.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+            LocalDate today = LocalDate.now();
+            int age = Period.between(birthDate, today).getYears();
+
+            return age >= 18;
+        } catch (Exception e) {
+            // Log the exception if you have a logger
+            // logger.error("Error validating age restriction: " + e.getMessage(), e);
             return false;
         }
-
-        LocalDate birthDate = dob.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-        LocalDate today = LocalDate.now();
-        int age = Period.between(birthDate, today).getYears();
-
-        return age >= 18;
     }
 }

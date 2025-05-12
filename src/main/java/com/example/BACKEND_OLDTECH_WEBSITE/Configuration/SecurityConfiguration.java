@@ -36,13 +36,15 @@ public class SecurityConfiguration {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**","/auth/**","/oauth2/**" ).permitAll()
-                .requestMatchers("/api/oauth2/**","/oauth2/**").permitAll()
-                .requestMatchers("/api/public/**").permitAll()
-                .requestMatchers("/api/admin/**","/admin/**").hasRole("ADMIN")
-                .requestMatchers("/api/customer/**").hasRole("CUSTOMER")
-                .requestMatchers("/api/seller/**").hasRole("SELLER")
-                .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
+                .requestMatchers(
+                        "/auth/**",
+                        "/oauth2/**",
+                        "/test/**"
+                ).permitAll()
+                .requestMatchers("/admin/**").hasRole("Admin")
+                .requestMatchers("/customer/**").hasRole("Customer")
+                .requestMatchers("/seller/**").hasRole("Seller")
+                .requestMatchers("/superadmin/**").hasRole("SuperAdmin")
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session

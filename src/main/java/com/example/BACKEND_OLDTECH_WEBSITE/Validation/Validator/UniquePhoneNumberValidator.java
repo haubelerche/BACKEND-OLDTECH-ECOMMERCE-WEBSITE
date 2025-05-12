@@ -15,9 +15,15 @@ public class UniquePhoneNumberValidator implements ConstraintValidator<UniquePho
 
     @Override
     public boolean isValid(String phone_number, ConstraintValidatorContext context) {
-        if (phone_number == null) {
-            return true;
+        try {
+            if (phone_number == null) {
+                return true;
+            }
+            return !userRepository.existsByPhoneNumber(phone_number);
+        } catch (Exception e) {
+            // Log the exception if you have a logger
+            // logger.error("Error validating unique phone number: " + e.getMessage(), e);
+            return false;
         }
-        return !userRepository.existsByPhoneNumber(phone_number);
     }
 }
