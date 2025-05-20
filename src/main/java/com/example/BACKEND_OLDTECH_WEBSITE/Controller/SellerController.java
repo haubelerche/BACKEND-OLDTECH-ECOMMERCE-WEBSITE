@@ -1,17 +1,18 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Product.ProductRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller.SellerRegisterRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller.SellerRegisterResponse;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.ProductImage;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
-import com.example.BACKEND_OLDTECH_WEBSITE.Service.SellerService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.ProductImageService;
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.SellerService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -38,11 +39,17 @@ public class SellerController {
         this.productImageService = productImageService;
     }
 
-    // Product Management Endpoints
+    //add
     @PostMapping("/{sellerId}/products")
-    public ResponseEntity<?> addProduct(@PathVariable Integer sellerId, @RequestBody Product product) {
+    public ResponseEntity<?> addProduct(@PathVariable Integer sellerId, @RequestBody ProductRequest request) {
         try {
-            Product addedProduct = sellerService.addProduct(sellerId, product);
+            Product addedProduct = sellerService.addProduct(
+                sellerId,
+                request.getName(),
+                request.getDescription(),
+                request.getPrice(),
+                request.getCategoryName()
+            );
             return ResponseEntity.status(HttpStatus.CREATED).body(addedProduct);
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
@@ -93,7 +100,7 @@ public class SellerController {
         }
     }
 
-    // Review Management Endpoints
+
     @PostMapping("/{sellerId}/reviews/{reviewId}/respond")
     public ResponseEntity<?> respondToReview(@PathVariable Integer sellerId, @PathVariable Integer reviewId, @RequestBody String response) {
         try {
@@ -177,16 +184,14 @@ public class SellerController {
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Phải cung cấp tham số 'active' hoặc 'status'");
             }
-            
+
             User user = sellerService.updateSellerStatus(sellerId, activeStatus);
             return ResponseEntity.ok(user);
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalStateException | IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật trạng thái người bán: " + e.getMessage());
@@ -208,35 +213,35 @@ public class SellerController {
     // Product Image Management Endpoints
     @PostMapping(value = "/{sellerId}/products/{productId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadProductImages(
-            @PathVariable Integer sellerId, 
+            @PathVariable Integer sellerId,
             @PathVariable Integer productId,
             @RequestParam("images") List<MultipartFile> images,
             @RequestParam("thumbnailIndex") Integer thumbnailIndex) {
-        
+
         try {
             // Verify seller owns the product
             List<Product> sellerProducts = sellerService.getProductsBySeller(sellerId);
             boolean productBelongsToSeller = sellerProducts.stream()
                     .anyMatch(p -> p.getProductId().equals(productId));
-            
+
             if (!productBelongsToSeller) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body("Sản phẩm không thuộc về người bán này");
             }
-            
+
             // Check minimum image requirement
             if (images.size() < 5) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body("Cần tải lên ít nhất 5 hình ảnh cho sản phẩm");
             }
-            
+
             // Validate file sizes (max 10MB each)
             for (MultipartFile image : images) {
                 if (image.getSize() > 10 * 1024 * 1024) { // 10MB in bytes
                     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                             .body("Hình ảnh '" + image.getOriginalFilename() + "' vượt quá kích thước tối đa 10MB");
                 }
-                
+
                 // Validate file type
                 String contentType = image.getContentType();
                 if (contentType == null || !contentType.startsWith("image/")) {
@@ -244,11 +249,10 @@ public class SellerController {
                             .body("Tệp '" + image.getOriginalFilename() + "' không phải là hình ảnh");
                 }
             }
-            
-            // Process image upload
+
             List<ProductImage> savedImages = productImageService.uploadProductImages(
                     productId, images, thumbnailIndex);
-            
+
             return ResponseEntity.status(HttpStatus.CREATED).body(savedImages);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
@@ -262,23 +266,22 @@ public class SellerController {
                     .body("Lỗi khi tải lên hình ảnh sản phẩm: " + e.getMessage());
         }
     }
-    
+
     @GetMapping("/{sellerId}/products/{productId}/images")
     public ResponseEntity<?> getProductImages(
             @PathVariable Integer sellerId,
             @PathVariable Integer productId) {
-        
+
         try {
-            // Verify seller owns the product
             List<Product> sellerProducts = sellerService.getProductsBySeller(sellerId);
             boolean productBelongsToSeller = sellerProducts.stream()
                     .anyMatch(p -> p.getProductId().equals(productId));
-            
+
             if (!productBelongsToSeller) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body("Sản phẩm không thuộc về người bán này");
             }
-            
+
             List<ProductImage> images = productImageService.getProductImages(productId);
             return ResponseEntity.ok(images);
         } catch (EntityNotFoundException e) {
@@ -288,24 +291,23 @@ public class SellerController {
                     .body("Lỗi khi lấy hình ảnh sản phẩm: " + e.getMessage());
         }
     }
-    
+
     @PutMapping("/{sellerId}/products/{productId}/images/{imageId}/thumbnail")
     public ResponseEntity<?> setProductThumbnail(
             @PathVariable Integer sellerId,
             @PathVariable Integer productId,
             @PathVariable Integer imageId) {
-        
+
         try {
-            // Verify seller owns the product
             List<Product> sellerProducts = sellerService.getProductsBySeller(sellerId);
             boolean productBelongsToSeller = sellerProducts.stream()
                     .anyMatch(p -> p.getProductId().equals(productId));
-            
+
             if (!productBelongsToSeller) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body("Sản phẩm không thuộc về người bán này");
             }
-            
+
             productImageService.updateProductThumbnail(productId, imageId);
             return ResponseEntity.ok("Đã cập nhật ảnh đại diện cho sản phẩm");
         } catch (EntityNotFoundException e) {
@@ -317,43 +319,43 @@ public class SellerController {
                     .body("Lỗi khi cập nhật ảnh đại diện: " + e.getMessage());
         }
     }
-    
+
     @DeleteMapping("/{sellerId}/products/{productId}/images/{imageId}")
     public ResponseEntity<?> deleteProductImage(
             @PathVariable Integer sellerId,
             @PathVariable Integer productId,
             @PathVariable Integer imageId) {
-        
+
         try {
             // Verify seller owns the product
             List<Product> sellerProducts = sellerService.getProductsBySeller(sellerId);
             boolean productBelongsToSeller = sellerProducts.stream()
                     .anyMatch(p -> p.getProductId().equals(productId));
-            
+
             if (!productBelongsToSeller) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body("Sản phẩm không thuộc về người bán này");
             }
-            
+
             // Check if product is approved
             Product product = sellerProducts.stream()
                     .filter(p -> p.getProductId().equals(productId))
                     .findFirst()
                     .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + productId));
-            
-            if (Boolean.TRUE.equals(product.getIsApproved()) || 
+
+            if (Boolean.TRUE.equals(product.getIsApproved()) ||
                     product.getStatus() == ProductStatusEnum.Approved) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body("Không thể xóa hình ảnh của sản phẩm đã được duyệt bởi admin");
             }
-            
+
             // Get current image count to maintain minimum requirement
             List<ProductImage> images = productImageService.getProductImages(productId);
             if (images.size() <= 5) {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                         .body("Không thể xóa hình ảnh này vì sản phẩm phải có ít nhất 5 hình ảnh");
             }
-            
+
             productImageService.deleteProductImage(imageId);
             return ResponseEntity.ok("Đã xóa hình ảnh sản phẩm");
         } catch (EntityNotFoundException e) {
@@ -374,16 +376,16 @@ public class SellerController {
                 System.out.println("DEBUG - Momo account is empty in request");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Tài khoản Momo không được để trống");
             }
-            
+
             Integer userId = request.getUserId();
             if (userId == null) {
                 System.out.println("DEBUG - UserId is null in request");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("ID người dùng không được để trống");
             }
-            
+
             System.out.println("DEBUG - Calling sellerService.requestToBecomeSeller with userId: " + userId);
             Seller seller = sellerService.requestToBecomeSeller(userId, request.getMomoAccount());
-            
+
             SellerRegisterResponse response = new SellerRegisterResponse();
             response.setSellerId(seller.getSellerId());
             response.setMomoAccount(seller.getMomoAccount());
@@ -392,7 +394,7 @@ public class SellerController {
             response.setBusinessStatus(seller.getBusinessStatus());
             response.setCreatedAt(seller.getCreatedAt());
             response.setUpdatedAt(seller.getUpdatedAt());
-            
+
             System.out.println("DEBUG - Successfully created seller application: " + response);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (EntityNotFoundException e) {
@@ -419,36 +421,36 @@ public class SellerController {
         } catch (Exception e) {
             System.out.println("DEBUG - Unexpected exception: " + e.getClass().getName() + ": " + e.getMessage());
             e.printStackTrace();
-            
+
             // Check for SQL exceptions that might be nested
             Throwable cause = e.getCause();
             if (cause instanceof java.sql.SQLException) {
                 java.sql.SQLException sqlEx = (java.sql.SQLException) cause;
-                System.out.println("DEBUG - SQL Exception: " + sqlEx.getMessage() + 
-                        ", SQLState: " + sqlEx.getSQLState() + 
+                System.out.println("DEBUG - SQL Exception: " + sqlEx.getMessage() +
+                        ", SQLState: " + sqlEx.getSQLState() +
                         ", ErrorCode: " + sqlEx.getErrorCode());
-                
+
                 // Check for duplicate key violation
                 if (sqlEx.getErrorCode() == 1062 || (sqlEx.getSQLState() != null && sqlEx.getSQLState().equals("23000"))) {
                     return ResponseEntity.status(HttpStatus.CONFLICT)
                         .body("Đã có yêu cầu đăng ký cho người dùng này. Vui lòng thử lại sau.");
                 }
-                
+
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi cơ sở dữ liệu khi đăng ký: " + sqlEx.getMessage());
             }
-            
-            // Check if it's a transaction-related exception 
+
+            // Check if it's a transaction-related exception
             if (e.getMessage() != null && (
                 e.getMessage().contains("Row was updated or deleted by another transaction") ||
                 e.getMessage().contains("could not execute statement") ||
                 e.getMessage().contains("ConstraintViolationException") ||
                 e.getMessage().contains("Duplicate entry"))) {
-                
+
                 return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body("Hệ thống đang xử lý nhiều yêu cầu. Vui lòng thử lại sau ít phút.");
             }
-            
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body("Lỗi khi đăng ký làm người bán: " + e.getMessage());
         }

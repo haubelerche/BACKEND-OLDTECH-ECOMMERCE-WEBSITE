@@ -26,6 +26,8 @@ public class VerificationDetail {
     @Column(name = "is_approved")
     private Boolean isApproved;
 
+    @Column(name = "admin_response")
+    private String adminResponse;
     @Column(name = "selfie_pic_url")
     private String selfiePicUrl;
 

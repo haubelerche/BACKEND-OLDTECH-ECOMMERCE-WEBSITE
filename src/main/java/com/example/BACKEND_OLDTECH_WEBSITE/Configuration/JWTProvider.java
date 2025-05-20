@@ -24,7 +24,7 @@ public class JWTProvider {
     private String jwtSecret;
 
     @Value("${app.jwt.expiration}")
-    private int jwtExpiration;
+    private long jwtExpiration;
 
     @Value("${app.jwt.refresh-expiration}")
     private int refreshExpiration;

@@ -17,7 +17,7 @@ public class Review {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-
+    @Column(name = "review_id", columnDefinition = "INT UNSIGNED", nullable = false)
     private Integer reviewId;
 
 

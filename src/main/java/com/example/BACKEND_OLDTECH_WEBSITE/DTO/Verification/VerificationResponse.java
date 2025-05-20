@@ -7,7 +7,8 @@ import java.sql.Timestamp;
 public class VerificationResponse {
     private Integer verifyId;
     private Integer userId;
-    private Boolean isVerified;
+    private Boolean isApproved;
+    private String adminResponse;
     private String selfiePicUrl;
     private String frontImageUrl;
     private String backImageUrl;

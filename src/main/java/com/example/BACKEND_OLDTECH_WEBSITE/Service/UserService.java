@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.UUID;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -49,13 +50,14 @@ public class UserService implements UserDetailsService {
     private final SellerRepository sellerRepository;
     private final ProductRepository productRepository;
     private final ProductImageRepository productImageRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     @PersistenceContext
     private EntityManager entityManager;
 
     @Autowired
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, ComplaintRepository complaintRepository, NotificationRepository notificationRepository, VerificationDetailRepository verificationDetailRepository, AddressRepository addressRepository, OrderRepository orderRepository, RefundRepository refundRepository, SellerRepository sellerRepository, ProductRepository productRepository, ProductImageRepository productImageRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, ComplaintRepository complaintRepository, NotificationRepository notificationRepository, VerificationDetailRepository verificationDetailRepository, AddressRepository addressRepository, OrderRepository orderRepository, RefundRepository refundRepository, SellerRepository sellerRepository, ProductRepository productRepository, ProductImageRepository productImageRepository, PasswordResetTokenRepository passwordResetTokenRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.complaintRepository = complaintRepository;
@@ -67,6 +69,7 @@ public class UserService implements UserDetailsService {
         this.sellerRepository = sellerRepository;
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
+        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
 
     public boolean existsByEmail(String email) {
@@ -98,11 +101,8 @@ public class UserService implements UserDetailsService {
         user.setAvatarUrl(registerRequest.getAvatarUrl());
 
       
-        if (registerRequest.getRole() != null) {
-            user.setRole(registerRequest.getRole());
-        } else {
-            user.setRole(RoleEnum.Customer);
-        }
+        // Set role to Customer by default
+        user.setRole(RoleEnum.Customer);
 
         user.setIsVerified(false);
 
@@ -694,5 +694,45 @@ public class UserService implements UserDetailsService {
         userRepository.save(user);
         
         log.info("Đã cập nhật ảnh đại diện cho người dùng ID: {}", userId);
+    }
+
+    @Transactional
+    public String createPasswordResetTokenForUser(User user) {
+        String token = UUID.randomUUID().toString();
+        PasswordResetToken existingToken = passwordResetTokenRepository.findByUser(user).orElse(null);
+        if (existingToken != null) {
+            existingToken.setToken(token);
+            existingToken.setExpiryDate(existingToken.calculateExpiryDate(PasswordResetToken.EXPIRATION)); // Recalculate expiry
+            passwordResetTokenRepository.save(existingToken);
+        } else {
+            PasswordResetToken myToken = new PasswordResetToken(token, user);
+            passwordResetTokenRepository.save(myToken);
+        }
+        return token;
+    }
+
+    public PasswordResetToken getPasswordResetToken(String token) {
+        return passwordResetTokenRepository.findByToken(token).orElse(null);
+    }
+
+    public User getUserByPasswordResetToken(String token) {
+        PasswordResetToken passToken = passwordResetTokenRepository.findByToken(token).orElse(null);
+        if (passToken == null) {
+            return null;
+        }
+        return passToken.getUser();
+    }
+
+    public void changeUserPassword(User user, String newPassword) {
+        user.setPassword(passwordEncoder.encode(newPassword)); // Make sure to hash the new password
+        userRepository.save(user);
+        // Invalidate the token after successful password change
+        passwordResetTokenRepository.findByUser(user).ifPresent(passwordResetTokenRepository::delete);
+    }
+
+    // Add method to get user by email if it doesn't exist for AuthenticationService
+    public User findUserByEmail(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
     }
 }

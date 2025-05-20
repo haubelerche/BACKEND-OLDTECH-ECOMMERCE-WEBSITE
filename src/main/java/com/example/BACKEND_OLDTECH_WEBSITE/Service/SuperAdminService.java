@@ -1,6 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateAdminRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateSuperAdminRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AuthProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
@@ -60,15 +61,51 @@ public class SuperAdminService {
         return userRepository.save(admin);
     }
 
+    @Transactional
+    public User createSuperAdminAccount(CreateSuperAdminRequest request) {
+        if (!request.getEmail().startsWith("managerotech")) {
+            throw new IllegalArgumentException("SuperAdmin email must start with 'managerotech'.");
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new IllegalArgumentException("Email already exists: " + request.getEmail());
+        }
+        if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new IllegalArgumentException("Phone number already exists: " + request.getPhoneNumber());
+        }
+
+        User superAdmin = new User();
+        superAdmin.setEmail(request.getEmail());
+        superAdmin.setPassword(passwordEncoder.encode(request.getPassword()));
+        superAdmin.setFirstName(request.getFirstName());
+        superAdmin.setLastName(request.getLastName());
+        superAdmin.setPhoneNumber(request.getPhoneNumber());
+        superAdmin.setRole(RoleEnum.SuperAdmin);
+        superAdmin.setAccountStatus(AccountStatusEnum.Active);
+        superAdmin.setIsVerified(true);
+        superAdmin.setCreatedAt(Timestamp.from(Instant.now()));
+        superAdmin.setUpdatedAt(Timestamp.from(Instant.now()));
+        superAdmin.setAuthProvider(AuthProvider.local);
+
+        return userRepository.save(superAdmin);
+    }
+
     //delete admin account
     @Transactional
     public void deleteAdminAccount(Integer adminUserId) {
         User admin = userRepository.findById(adminUserId)
                 .orElseThrow(() -> new EntityNotFoundException("Admin user not found with ID: " + adminUserId));
+
+        // Check if the user is actually an Admin
         if (admin.getRole() != RoleEnum.Admin) {
             throw new IllegalArgumentException("User with ID: " + adminUserId + " is not an Admin.");
         }
-        userRepository.deleteById(adminUserId);
+
+        // Instead of physically deleting, mark as deleted and anonymize data
+        admin.setAccountStatus(AccountStatusEnum.Deleted);
+        admin.setUpdatedAt(Timestamp.from(Instant.now()));
+
+        // Save the updated user instead of deleting
+        userRepository.save(admin);
     }
 
     //update admin account (basic info, not password or role here)
@@ -107,31 +144,6 @@ public class SuperAdminService {
         return userRepository.findAll().stream()
                 .filter(user -> user.getRole() == RoleEnum.Admin)
                 .collect(Collectors.toList());
-    }
-
-    //set user role
-    @Transactional
-    public User setUserRole(Integer userId, RoleEnum newRole) {
-        User user = userRepository.findById(userId)
-                 .orElseThrow(() -> new EntityNotFoundException("Người dùng không tồn tại với ID: " + userId));
-        
-
-        // Specific check for SuperAdmin email
-        if (newRole == RoleEnum.SuperAdmin) {
-            if (user.getEmail() == null || !user.getEmail().startsWith("managerotech")) {
-                 throw new IllegalArgumentException("User email ('" + user.getEmail() + "') must start with 'managerotech' to be assigned the SuperAdmin role.");
-            }
-        } 
-        // Check for Admin email prefix when assigning Admin role
-        else if (newRole == RoleEnum.Admin) {
-            if (user.getEmail() == null || !user.getEmail().startsWith("staffotech")) {
-                  throw new IllegalArgumentException("User email ('" + user.getEmail() + "') must start with 'staffotech' to be assigned the Admin role.");
-            }
-        }
-
-        user.setRole(newRole);
-        user.setUpdatedAt(Timestamp.from(Instant.now()));
-        return userRepository.save(user);
     }
 
     //manage system settings

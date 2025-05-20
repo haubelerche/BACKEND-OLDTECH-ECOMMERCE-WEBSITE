@@ -21,10 +21,6 @@ public class ProductRequest {
     @DecimalMin(value = "0.0", inclusive = false, message = "Giá phải lớn hơn 0")
     private BigDecimal price;
 
-@Enumerated(EnumType.STRING)
-    @NotNull(message = "Trạng thái không được để trống")
-    private ProductStatusEnum status;
-
-    private Integer categoryId;
-    private Integer sellerId;
+    @NotBlank(message = "Tên danh mục không được để trống")
+    private String categoryName;
 }

@@ -1,5 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
-
+//90%
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateAdminRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
@@ -10,15 +10,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-// import org.springframework.security.access.prepost.PreAuthorize;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateSuperAdminRequest;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.sql.Timestamp;
 import java.util.List;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import java.util.Map;
 
 @RestController
-@RequestMapping("/mng/superadmin")
-// @PreAuthorize("hasRole('SuperAdmin') and principal.username.startsWith('managerotech')") // Temporarily removed for testing
+@RequestMapping("/manager")  // Changed to remove trailing slash
 @CrossOrigin(origins = "*")
 public class SuperAdminController {
 
@@ -29,22 +32,56 @@ public class SuperAdminController {
         this.superAdminService = superAdminService;
     }
 
-    // Admin Account Management
+
+//TẠO TÀI KHOẢN SUPERADMIN
+    @PostMapping("/superadmins")
+    public ResponseEntity<?> createSuperAdminAccount(@Valid @RequestBody CreateSuperAdminRequest request) {
+        try {
+            User newSuperAdmin = superAdminService.createSuperAdminAccount(request);
+            return new ResponseEntity<>(newSuperAdmin, HttpStatus.CREATED);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi tạo tài khoản SuperAdmin: " + e.getMessage());
+        }
+    }
+
+
+
+//TẠO TÀI KHOẢN ADMIN
     @PostMapping("/admins")
+    @PreAuthorize("hasAuthority('SuperAdmin')")
     public ResponseEntity<?> createAdminAccount(@Valid @RequestBody CreateAdminRequest request) {
         try {
+            // Add debug logging
+            System.out.println("Creating admin account with email: " + request.getEmail());
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            System.out.println("Current user: " + auth.getName());
+            System.out.println("User authorities: " + auth.getAuthorities());
+
             User newAdmin = superAdminService.createAdminAccount(request);
             return new ResponseEntity<>(newAdmin, HttpStatus.CREATED);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
+            e.printStackTrace(); // Print the full stack trace
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi tạo tài khoản Admin: " + e.getMessage());
         }
     }
 
+
+
+//XÓA TÀI KHOẢN ADMIN
     @DeleteMapping("/admins/{adminUserId}")
+    @PreAuthorize("hasAuthority('SuperAdmin')")
     public ResponseEntity<?> deleteAdminAccount(@PathVariable Integer adminUserId) {
         try {
+            // Add debug logging
+            System.out.println("Deleting admin account with ID: " + adminUserId);
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            System.out.println("Current user: " + auth.getName());
+            System.out.println("User authorities: " + auth.getAuthorities());
+
             superAdminService.deleteAdminAccount(adminUserId);
             return ResponseEntity.ok("Tài khoản Admin đã được xóa thành công.");
         } catch (EntityNotFoundException e) {
@@ -52,11 +89,16 @@ public class SuperAdminController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
+            e.printStackTrace(); // Print the full stack trace
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi xóa tài khoản Admin: " + e.getMessage());
         }
     }
 
+
+
+//CẬP NHẬT TÀI KHOẢN ADMIN
     @PutMapping("/admins/{adminUserId}")
+    @PreAuthorize("hasAuthority('SuperAdmin')")
     public ResponseEntity<?> updateAdminAccount(@PathVariable Integer adminUserId, @Valid @RequestBody CreateAdminRequest request) {
         try {
             User updatedAdmin = superAdminService.updateAdminAccount(adminUserId, request);
@@ -70,7 +112,11 @@ public class SuperAdminController {
         }
     }
 
+
+
+//LẤY DANH SÁCH TOÀN BỘ ADMIN
     @GetMapping("/admins")
+    @PreAuthorize("hasAuthority('SuperAdmin')")
     public ResponseEntity<?> getAllAdminAccounts() {
         try {
             List<User> admins = superAdminService.getAllAdminAccounts();
@@ -80,22 +126,8 @@ public class SuperAdminController {
         }
     }
 
-    // User Role Management
-    @PutMapping("/users/{userId}/role")
-    public ResponseEntity<?> setUserRole(@PathVariable Integer userId, @RequestParam RoleEnum newRole) {
-        try {
-            User updatedUser = superAdminService.setUserRole(userId, newRole);
-            return ResponseEntity.ok(updatedUser);
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật vai trò người dùng: " + e.getMessage());
-        }
-    }
-
     // System Settings Management
+    /* 
     @PostMapping("/system/settings")
     public ResponseEntity<?> manageSystemSettings(@RequestParam String key, @RequestParam String value) {
         try {
@@ -172,8 +204,9 @@ public class SuperAdminController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi khôi phục hệ thống: " + e.getMessage());
         }
-    }
+    }*/
 } 
 
 
-//temporary will update later   
+//temporary will update later
+

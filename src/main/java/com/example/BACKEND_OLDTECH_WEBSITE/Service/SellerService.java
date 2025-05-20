@@ -1,30 +1,44 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.UserRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.SellerRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ReviewRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderDetailRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum; 
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
-import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.transaction.annotation.Transactional;
-import jakarta.persistence.EntityNotFoundException;
+// Standard Java imports
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.List;
-import java.math.BigDecimal;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+// Jakarta Persistence imports
+import jakarta.persistence.EntityNotFoundException;
+
+// Spring Framework imports
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+// Application-specific Enums
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
+
+// Application-specific Models
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Category; // Assuming you meant to use this, was previously fully qualified
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
+
+// Application-specific Repositories
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.CategoryRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderDetailRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ReviewRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.SellerRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.UserRepository;
 
 @Service
 public class SellerService {
@@ -35,41 +49,50 @@ public class SellerService {
     private final OrderDetailRepository orderDetailRepository;
     private final OrderRepository orderRepository;
     private final SellerRepository sellerRepository;
+    private final CategoryRepository categoryRepository;
 
     @Autowired
-    public SellerService(UserRepository userRepository, ProductRepository productRepository, ReviewRepository reviewRepository, OrderDetailRepository orderDetailRepository, OrderRepository orderRepository, SellerRepository sellerRepository) {
+    public SellerService(UserRepository userRepository, ProductRepository productRepository, ReviewRepository reviewRepository, OrderDetailRepository orderDetailRepository, OrderRepository orderRepository, SellerRepository sellerRepository, CategoryRepository categoryRepository) {
         this.userRepository = userRepository;
         this.productRepository = productRepository;
         this.reviewRepository = reviewRepository;
         this.orderDetailRepository = orderDetailRepository;
         this.orderRepository = orderRepository;
         this.sellerRepository = sellerRepository;
+        this.categoryRepository = categoryRepository;
     }
 
     @Transactional
-    public Product addProduct(Integer sellerId, Product product) {
+    public Product addProduct(Integer sellerId, String name, String description, BigDecimal price, String categoryName) {
         // Find the seller (User)
         User seller = userRepository.findById(sellerId)
             .orElseThrow(() -> new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId));
 
-
+        // Check role (Seller or Admin can add)
         if (seller.getRole() != RoleEnum.Seller && seller.getRole() != RoleEnum.Admin) {
             throw new SecurityException("Người dùng với ID: " + sellerId + " không được cấp quyền để thêm sản phẩm.");
         }
 
-        product.setSellerId(sellerId);
+        // Find category by name
+        Category category = categoryRepository.findByName(categoryName)
+            .stream()
+            .findFirst()
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy danh mục với tên: " + categoryName));
 
-
-        if (product.getCreatedAt() == null) {
-            product.setCreatedAt(Timestamp.from(Instant.now()));
-        }
-        
-
-        if (product.getIsApproved() == null) {
-             product.setIsApproved(false); // Default to not approved, requiring admin verification
-        }
-
-
+        // Create new product with default values
+       // Create new product with default values
+        Product product = Product.builder()
+        .sellerId(sellerId)
+        .name(name)
+        .description(description)
+        .price(price)
+        .categoryId(category.getId().intValue()) // Use the 'category' instance here
+        .status(ProductStatusEnum.Pending)  // Default status
+        .isApproved(false)  // Default to not approved
+        .isVisible(false) // Default visibility to false
+        .createdAt(new Timestamp(System.currentTimeMillis()))
+        .updatedAt(new Timestamp(System.currentTimeMillis()))
+        .build();
         return productRepository.save(product);
     }
 
@@ -406,7 +429,7 @@ public class SellerService {
                 System.out.println("Momo account is too short: " + momoAccount.length());
                 throw new IllegalArgumentException("Tài khoản Momo phải có ít nhất 8 ký tự");
             }
-
+            
             // Get EntityManager from repository
             jakarta.persistence.EntityManager em = sellerRepository.getEntityManager();
             
@@ -415,7 +438,7 @@ public class SellerService {
                 "SELECT COUNT(*) FROM seller WHERE seller_id = ?")
                 .setParameter(1, userId)
                 .getSingleResult();
-            
+                    
             // If record exists, delete it
             if (count > 0) {
                 em.createNativeQuery("DELETE FROM seller WHERE seller_id = ?")
@@ -582,5 +605,27 @@ public class SellerService {
         // Save both entities
         sellerRepository.save(seller);
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public Product approveProduct(Integer productId, Integer adminId) {
+        // 1. Verify adminId has Admin role
+        User admin = userRepository.findById(adminId)
+            .orElseThrow(() -> new EntityNotFoundException("Admin không tồn tại với ID: " + adminId));
+        if (admin.getRole() != RoleEnum.Admin) {
+            throw new SecurityException("Chỉ có Admin mới được duyệt sản phẩm.");
+        }
+
+        // 2. Find the product
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new EntityNotFoundException("Sản phẩm không tồn tại với ID: " + productId));
+
+        // 3. Set approval status
+        product.setIsApproved(true);
+        product.setStatus(ProductStatusEnum.Approved); // Or some other appropriate status
+        product.setUpdatedAt(Timestamp.from(Instant.now()));
+        // You might also want to set an approvedBy field if you track that
+
+        return productRepository.save(product);
     }
 }

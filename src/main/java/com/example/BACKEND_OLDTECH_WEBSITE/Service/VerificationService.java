@@ -62,7 +62,7 @@ public class VerificationService {
     }
 
     private void clearVerificationData(VerificationDetail vd) {
-        vd.setSelfiePicUrl(null); // Changed from setNationalId
+        vd.setSelfiePicUrl(null);
         vd.setFrontImageUrl(null);
         vd.setBackImageUrl(null);
         vd.setIsApproved(false);
@@ -126,7 +126,7 @@ public class VerificationService {
     }
 
     @Transactional
-    public VerificationDetail rejectVerification(Integer verificationDetailId, Integer adminUserId, String reason) {
+    public VerificationDetail rejectVerification(Integer verificationDetailId, Integer adminUserId, String adminResponse) {
         VerificationDetail verificationDetail = verificationDetailRepository.findById(verificationDetailId)
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin xác thực mang ID này: " + verificationDetailId));
 
@@ -144,7 +144,7 @@ public class VerificationService {
         verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
         VerificationDetail savedDetail = verificationDetailRepository.save(verificationDetail);
         
-        sendNotification(userToUpdate, "Hồ sơ xác thực của bạn đã bị từ chối. Lý do: " + reason + ". Vui lòng kiểm tra và gửi lại nếu cần thiết.");
+        sendNotification(userToUpdate, "Hồ sơ xác thực của bạn đã bị từ chối. Lý do: " + adminResponse + ". Vui lòng kiểm tra và gửi lại.");
         return savedDetail;
     }
 
@@ -182,7 +182,7 @@ public class VerificationService {
         VerificationResponse response = new VerificationResponse();
         response.setVerifyId(detail.getVerifyId());
         response.setUserId(detail.getUser().getUserId());
-        response.setIsVerified(detail.getIsApproved());
+        response.setIsApproved(detail.getIsApproved());
         response.setSelfiePicUrl(detail.getSelfiePicUrl());
         response.setFrontImageUrl(detail.getFrontImageUrl());
         response.setBackImageUrl(detail.getBackImageUrl());
@@ -202,7 +202,7 @@ public class VerificationService {
     }
 
     @Transactional
-    public VerificationDetail reviewVerification(Integer verificationDetailId, boolean isVerified, String reason, Integer adminUserId) {
+    public VerificationDetail reviewVerification(Integer verificationDetailId, boolean isVerified, String adminResponse, Integer adminUserId) {
         VerificationDetail verificationDetail = verificationDetailRepository.findById(verificationDetailId)
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin xác thực mang ID này: " + verificationDetailId));
         User user = verificationDetail.getUser();
@@ -214,7 +214,7 @@ public class VerificationService {
         if (isVerified) {
             sendNotification(user, "Bravo! Yêu cầu xác thực danh tính của bạn đã được phê duyệt.");
         } else {
-            sendNotification(user, "Hồ sơ xác thực của bạn đã bị từ chối. Lý do: " + (reason != null ? reason : "Không đáp ứng yêu cầu của hệ thống") + ". Vui lòng kiểm tra và gửi lại nếu cần thiết.");
+            sendNotification(user, "Hồ sơ xác thực của bạn đã bị từ chối. Lý do: " + (adminResponse != null ? adminResponse : "Không đáp ứng yêu cầu của hệ thống") + ". Vui lòng kiểm tra và gửi lại nếu cần thiết.");
         }
         return verificationDetail;
     }

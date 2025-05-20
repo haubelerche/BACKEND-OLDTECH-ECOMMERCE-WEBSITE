@@ -15,7 +15,7 @@ public class OrderDetail {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(columnDefinition = "INT UNSIGNED")
+    @Column(name = "order_detail_id", columnDefinition = "INT UNSIGNED", nullable = false)
     private Integer orderDetailId;
 
     @ManyToOne(fetch = FetchType.LAZY)

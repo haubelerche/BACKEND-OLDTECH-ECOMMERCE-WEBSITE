@@ -19,7 +19,7 @@ public class Product {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(columnDefinition = "INT UNSIGNED")
+    @Column(name = "product_id", columnDefinition = "INT UNSIGNED", nullable = false)
     private Integer productId;
 
     @Column(columnDefinition = "INT UNSIGNED")

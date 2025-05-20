@@ -48,6 +48,7 @@ public class Orders {
 
     @Column(name = "updated_at")
     private Timestamp updatedAt;
+
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "shipping_address_id", referencedColumnName = "address_id", insertable = false, updatable = false)

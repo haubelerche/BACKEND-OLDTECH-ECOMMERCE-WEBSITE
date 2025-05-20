@@ -6,14 +6,14 @@ import org.springframework.context.annotation.Configuration;
 
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
-
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.config.Customizer;
 
 import java.util.Arrays;
 import java.util.List;
@@ -21,10 +21,11 @@ import java.util.List;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(prePostEnabled = true)
+@EnableMethodSecurity(prePostEnabled = true, securedEnabled = true, jsr250Enabled = true)
 @RequiredArgsConstructor
 public class SecurityConfiguration {
 
@@ -36,25 +37,46 @@ public class SecurityConfiguration {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
+                // Public endpoints - accessible without authentication
                 .requestMatchers(
-                        "/auth/**",
-                        "/oauth2/**",
-                        "/test/**",
-                        "/mng/superadmin/**",                
-                        "/customer/public/**",
-                        "/customer/profile/**",           
-                        "/customer/{userId}",             
-                        "/customer/search/{name}",
-                        "/admin/public/**",
-                        "/admin/**",
-                        "/customer/**",
-                        "/customer/public/**",
-                        "/seller/**",
-                        "/sellers/**",  // Explicitly added mapping for sellers endpoint
-                        "/seller/public/**",
-                        "/superadmin/**",
-                        "/superadmin/public/**"       
+                    "/auth/**",
+                    "/oauth2/**",
+                    "/public/**",
+                    "/oldtech/auth/**",
+                    "/oldtech/oauth2/**",
+                    "/oldtech/public/**",
+                    "/oldtech/manager/superadmins"
                 ).permitAll()
+
+                // Admin-only endpoints
+                .requestMatchers(
+                    "/admin/**",
+                    "/oldtech/admin/**",
+                    "/oldtech/verification/admin/**"  // Added verification admin endpoint
+                ).hasAnyAuthority("Admin", "SuperAdmin")
+
+                // Seller-only endpoints
+                .requestMatchers("/seller/**", "/oldtech/seller/**")
+                    .hasAnyAuthority("Seller", "Admin", "SuperAdmin")
+
+                // SuperAdmin-only endpoints
+                .requestMatchers("/oldtech/manager/admins",
+                        "/oldtech/manager/**",
+                        "/manager/**",
+                        "/oldtech/manager/admins/**"
+                ).hasAuthority("SuperAdmin")
+
+                // Customer-specific endpoints that require authentication
+                .requestMatchers(
+                    "/customer/profile/**",
+                    "/customer/{userId}",
+                    "/customer/search/{name}",
+                    "/customer/**",
+                    "/oldtech/customer/**"
+                ).hasAnyAuthority("Customer", "Seller", "Admin", "SuperAdmin")
+
+                // Any other request requires authentication
+                .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
@@ -72,9 +94,11 @@ public class SecurityConfiguration {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000"));
+        configuration.setAllowedOrigins(Arrays.asList(
+            "http://localhost:3000"
+        ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -82,5 +106,4 @@ public class SecurityConfiguration {
         return source;
     }
 }
-
 

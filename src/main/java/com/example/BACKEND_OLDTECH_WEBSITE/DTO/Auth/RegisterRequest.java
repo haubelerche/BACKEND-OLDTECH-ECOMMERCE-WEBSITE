@@ -39,11 +39,10 @@ public class RegisterRequest {
     private String lastName;
 
 
-
     @NotNull(message = "Ngày sinh không được để trống")
     @AgeRestriction(message = "Yêu cầu trên 18 tuổi để đăng ký tài khoản")
     private Date dob;
 
     private String avatarUrl;
-    private RoleEnum role;
+
 }

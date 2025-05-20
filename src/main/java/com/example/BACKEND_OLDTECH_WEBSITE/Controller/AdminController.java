@@ -384,7 +384,7 @@ public class AdminController {
         try {
             List<VerificationDetail> verifications = verificationService.getPendingVerifications();
             List<VerificationResponse> responseList = verifications.stream()
-                .map(detail -> verificationService.mapToVerificationResponse(detail))
+                .map(verificationService::mapToVerificationResponse)
                 .collect(java.util.stream.Collectors.toList());
             return ResponseEntity.ok(responseList);
         } catch (Exception e) {

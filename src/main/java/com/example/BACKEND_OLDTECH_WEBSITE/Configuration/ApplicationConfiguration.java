@@ -31,12 +31,19 @@ public class ApplicationConfiguration {
             User user = userRepository.findByEmail(email)
                     .orElseThrow(() -> {
                         logger.error("User not found with email: {}", email);
-                        return new UsernameNotFoundException("Không tìm thấy tài khoản với email: " + email);
+                        return new UsernameNotFoundException("Không tìm thấy tài khoản với email: " + email);
                     });
+
+
+            String authority = user.getRole().name();
+
+            logger.info("UserDetailsService - User: {}, DB Role: {}, Granted Authority: {}",
+                    user.getEmail(), user.getRole().name(), authority);
+
             return new org.springframework.security.core.userdetails.User(
                     user.getEmail(),
                     user.getPassword(),
-                    Collections.singletonList(new SimpleGrantedAuthority(user.getRole().name()))
+                    Collections.singletonList(new SimpleGrantedAuthority(authority))
             );
         };
     }
@@ -55,3 +62,4 @@ public class ApplicationConfiguration {
         return new BCryptPasswordEncoder();
     }
 }
+

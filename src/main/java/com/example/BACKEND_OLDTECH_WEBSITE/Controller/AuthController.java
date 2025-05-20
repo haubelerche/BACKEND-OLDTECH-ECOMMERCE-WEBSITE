@@ -1,14 +1,14 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
-/*
-registerUser()
-loginUser()
- */
-
+//90%
+//TODO:ASK Long ABOUT DOMAIN
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.LoginRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RefreshTokenRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.ForgotPasswordRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.ResetPasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Configuration.JWTProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.AuthenticationService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,13 +19,15 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin(origins = "*", maxAge = 3600)
+
+@CrossOrigin(origins = "*",maxAge = 3600)
 @RequiredArgsConstructor
 public class AuthController {
 
@@ -38,6 +40,12 @@ public class AuthController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private AuthenticationService authenticationService;
+
+
+
+//ĐĂNG NHẬP
     @PostMapping("/login")
     public ResponseEntity<?> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {
@@ -65,6 +73,8 @@ public class AuthController {
         }
     }
 
+
+//ĐĂNG KÝ
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
     System.out.println("Register endpoint called!");
@@ -84,6 +94,10 @@ public class AuthController {
     }
 }
 
+
+
+
+//LÀM MỚI TOKEN
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
         try {
@@ -108,6 +122,44 @@ public class AuthController {
         }
     }
 
+
+
+//QUÊN MẬT KHẨU
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest) {
+        try {
+            String result = authenticationService.handleForgotPassword(forgotPasswordRequest.getEmail());
+            return ResponseEntity.ok(result);
+        } catch (UsernameNotFoundException e) {
+            // Even if user not found, return a generic message to prevent email enumeration
+            return ResponseEntity.ok("Nếu email của bạn tồn tại trong hệ thống, một liên kết đặt lại mật khẩu đã được gửi.");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Lỗi yêu cầu đặt lại mật khẩu: " + e.getMessage());
+        }
+    }
+
+
+
+
+//ĐẶT LẠI MẬT KHẨU
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest resetPasswordRequest) {
+        try {
+            String result = authenticationService.handleResetPassword(
+                resetPasswordRequest.getToken(),
+                resetPasswordRequest.getNewPassword()
+            );
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Lỗi đặt lại mật khẩu: " + e.getMessage());
+        }
+    }
+
+
+
+//ĐĂNG XUẤT
     @PostMapping("/logout")
     public ResponseEntity<?> logoutUser() {
         // For stateless JWT, just return OK. Client should delete the token.
