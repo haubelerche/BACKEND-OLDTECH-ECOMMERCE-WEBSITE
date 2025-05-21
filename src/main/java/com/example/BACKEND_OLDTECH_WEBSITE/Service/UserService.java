@@ -1,6 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.SuspendUserRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.UpdateUserProfileRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.ChangePasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AuthProvider;
@@ -8,6 +9,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatus;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Exception.AccountSuspendedException;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.*;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.*;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Verification.VerificationRequest;
@@ -22,7 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -768,10 +773,64 @@ public class UserService implements UserDetailsService {
         userRepository.save(user);
     }
 
+    @Transactional
+    public void suspendAccount(Integer userId, SuspendUserRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        user.setAccountStatus(AccountStatusEnum.Suspended);
+
+        // Set suspension end time
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime endTime = now.plusHours(request.getDurationInHours());
+        user.setSuspensionEndTime(endTime);
+        user.setSuspensionReason(request.getReason());
+
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+
+        // Send notification to user about suspension
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Tài khoản của bạn đã bị tạm khóa đến " +
+                endTime.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
+                ". Lý do: " + request.getReason());
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        notificationRepository.save(notification);
+    }
 
 
+    private void validateUserStatus(User user) {
+        if (user.getAccountStatus() == AccountStatusEnum.Suspended) {
+            LocalDateTime now = LocalDateTime.now();
+            if (user.getSuspensionEndTime() != null && now.isBefore(user.getSuspensionEndTime())) {
+                // Calculate remaining time
+                Duration duration = Duration.between(now, user.getSuspensionEndTime());
+                long hours = duration.toHours();
+                long minutes = duration.toMinutesPart();
 
+                String timeRemaining = hours + " giờ " + minutes + " phút";
+                String reason = user.getSuspensionReason() != null ? user.getSuspensionReason() : "Vi phạm quy định của nền tảng";
 
+                throw new AccountSuspendedException(
+                        "Tài khoản của bạn đã bị tạm khóa. Thời gian còn lại: " +
+                                timeRemaining + ". Lý do: " + reason);
+            } else if (user.getSuspensionEndTime() != null && now.isAfter(user.getSuspensionEndTime())) {
+                // Suspension is over, reactivate the account
+                user.setAccountStatus(AccountStatusEnum.Active);
+                user.setSuspensionEndTime(null);
+                user.setSuspensionReason(null);
+                userRepository.save(user);
+            } else {
+                // Indefinite suspension (no end time)
+                throw new AccountSuspendedException(
+                        "Tài khoản của bạn đã bị tạm khóa vô thời hạn. Lý do: " +
+                                (user.getSuspensionReason() != null ? user.getSuspensionReason() : "Vi phạm quy định của nền tảng"));
+            }
+        }
+    }
 
 
 

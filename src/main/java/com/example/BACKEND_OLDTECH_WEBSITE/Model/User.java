@@ -16,6 +16,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 //import com.fasterxml.jackson.annotation.JsonFormat; if any1 ask how to change the day format
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user")
@@ -98,6 +99,11 @@ public class User {
     @Builder.Default
     @Column(name = "is_verified", nullable = false)
     private Boolean isVerified = false;
+
+    @Column(name = "suspension_end_time")
+    private LocalDateTime suspensionEndTime;
+    @Column(name = "suspension_reason")
+    private String suspensionReason;
 
 
 

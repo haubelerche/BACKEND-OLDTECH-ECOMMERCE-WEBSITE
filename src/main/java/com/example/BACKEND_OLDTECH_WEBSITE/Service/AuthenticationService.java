@@ -3,6 +3,7 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 import com.example.BACKEND_OLDTECH_WEBSITE.Configuration.JWTProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.LoginRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.PasswordResetToken;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 
@@ -16,6 +17,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -52,7 +55,7 @@ public class AuthenticationService {
 
 
 
-    //WE TEST THIS LATER
+                //WE TEST THIS LATER
     public String handleForgotPassword(String email) {
         User user = userService.findUserByEmail(email);
         String token = userService.createPasswordResetTokenForUser(user);

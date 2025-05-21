@@ -1,5 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.SuspendUserRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
@@ -15,8 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.persistence.EntityNotFoundException;
 
 import java.util.List;
-import java.util.HashMap;
-import java.util.Map;
+
 
 @RestController
 @RequestMapping("/customer")
@@ -137,18 +137,21 @@ public class UserController {
 
 
  //ĐÌNH CHỈ TÀI KHOẢN NGƯỜI DÙNG (ĐÌNH CHỈ TỪ TÀI KHOẢN GỐC LÀ CUSTOMER THÌ CHỨC NĂNG SELLER CŨNG BỊ ĐÌNH CHỈ LUÔN)
-    @PostMapping("/admin/users/{userId}/suspend")
-    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
-    public ResponseEntity<?> adminSuspendAccount(@PathVariable Integer userId) {
-        try {
-            userService.deactivateAccount(userId, true);
-            return ResponseEntity.ok("Tài khoản người dùng đã bị đình chỉ bởi quản trị viên.");
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi đình chỉ tài khoản: " + e.getMessage());
-        }
-    }
+     @PostMapping("/admin/users/{userId}/suspend")
+     @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+     public ResponseEntity<?> adminSuspendAccount(
+             @PathVariable Integer userId,
+             @RequestBody SuspendUserRequest request) {
+         try {
+             userService.suspendAccount(userId, request);
+             return ResponseEntity.ok("Tài khoản người dùng đã bị đình chỉ bởi quản trị viên.");
+         } catch (UsernameNotFoundException e) {
+             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+         } catch (Exception e) {
+             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                     .body("Lỗi khi đình chỉ tài khoản: " + e.getMessage());
+         }
+     }
 
 
 
@@ -242,7 +245,7 @@ public class UserController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi đánh dấu thông báo đã đọc: " + e.getMessage());
         }
-    }
+    }}
 
 
 
@@ -260,34 +263,3 @@ public class UserController {
 
 
 
-    
-    //==============================================
-    // PUBLIC
-    //==============================================
-
-    // Check if email exists
-    @GetMapping("/public/check-email/{email}")
-    public ResponseEntity<?> checkEmailExists(@PathVariable String email) {
-        try {
-            boolean exists = userService.existsByEmail(email);
-            Map<String, Boolean> response = new HashMap<>();
-            response.put("exists", exists);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi kiểm tra email: " + e.getMessage());
-        }
-    }
-
-
-    @GetMapping("/public/check-phone/{phoneNumber}")
-    public ResponseEntity<?> checkPhoneExists(@PathVariable String phoneNumber) {
-        try {
-            boolean exists = userService.existsByPhoneNumber(phoneNumber);
-            Map<String, Boolean> response = new HashMap<>();
-            response.put("exists", exists);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi kiểm tra số điện thoại: " + e.getMessage());
-        }
-    }
-}
