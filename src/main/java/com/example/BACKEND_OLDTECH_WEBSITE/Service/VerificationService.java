@@ -206,11 +206,16 @@ public class VerificationService {
         VerificationDetail verificationDetail = verificationDetailRepository.findById(verificationDetailId)
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin xác thực mang ID này: " + verificationDetailId));
         User user = verificationDetail.getUser();
+
+        // Save admin response to the entity
+        verificationDetail.setAdminResponse(adminResponse);
         verificationDetail.setIsApproved(isVerified);
         verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
         verificationDetailRepository.save(verificationDetail);
         user.setIsVerified(isVerified);
         userRepository.save(user);
+
         if (isVerified) {
             sendNotification(user, "Bravo! Yêu cầu xác thực danh tính của bạn đã được phê duyệt.");
         } else {

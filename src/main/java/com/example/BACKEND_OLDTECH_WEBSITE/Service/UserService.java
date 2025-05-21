@@ -735,4 +735,46 @@ public class UserService implements UserDetailsService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
     }
+
+
+    @Transactional
+    public void deactivateAccount(Integer userId, boolean isAdminAction) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        if (isAdminAction) {
+            user.setAccountStatus(AccountStatusEnum.Suspended); // Admin ban/suspension
+        } else {
+            user.setAccountStatus(AccountStatusEnum.Inactive); // User self-deactivation
+        }
+
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public boolean canSelfReactivate(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        return user.getAccountStatus() != AccountStatusEnum.Suspended; // Can't reactivate if suspended by admin
+    }
+
+    @Transactional
+    public void reactivateAccount(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        user.setAccountStatus(AccountStatusEnum.Active);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+    }
+
+
+
+
+
+
+
+
+
+
 }

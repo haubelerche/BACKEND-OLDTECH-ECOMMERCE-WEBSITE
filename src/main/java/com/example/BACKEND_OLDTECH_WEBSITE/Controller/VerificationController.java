@@ -1,5 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
-
+//100%
+//FOR ADMIN GANG ONLY
 import java.util.List;
 import java.util.Optional;
 
@@ -36,7 +37,7 @@ public class VerificationController {
 
 
 
-    //LẤY DANH SÁCH TOÀN BỘ NGƯỜI CHỜ XÁC THỰC
+//LẤY DANH SÁCH TOÀN BỘ NGƯỜI CHỜ XÁC THỰC
     @GetMapping("/admin/pending")
     @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
     public String showPendingVerifications(Model model) {
@@ -47,7 +48,27 @@ public class VerificationController {
 
 
 
-    //LẤY THÔNG TIN CỤ THỂ MỘT NGƯỜI CHỜ XÁC THỰC
+
+//PHÊ DUYỆT HOẶC TỪ CHỐI YÊU CẦU XÁC THỰC
+    @PutMapping("/admin/toggle/{verificationDetailId}")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> toggleVerificationStatus(
+            @PathVariable Integer verificationDetailId,
+            @RequestBody VerificationToggleRequest request) {
+        try {
+
+            Integer adminUserId = 1;
+            VerificationDetail updatedDetail = verificationService.reviewVerification(
+                    verificationDetailId, request.getIsApproved(), request.getAdminResponse(), adminUserId);
+            return ResponseEntity.ok().body(updatedDetail);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }}
+
+
+
+
+//LẤY THÔNG TIN CỤ THỂ MỘT NGƯỜI CHỜ XÁC THỰC
     @GetMapping("/form/{userId}")
     @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
     public String showVerificationForm(@PathVariable Integer userId, Model model) {
@@ -71,7 +92,7 @@ public class VerificationController {
 
 
 
-    //LẤY TRẠNG THÁI XÁC THỰC CỦA MỘT NGƯỜI
+//LẤY TRẠNG THÁI XÁC THỰC CỦA MỘT NGƯỜI
     @GetMapping("/status/{userId}")
     @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
     public String showVerificationStatus(@PathVariable Integer userId, Model model) {
@@ -94,22 +115,8 @@ public class VerificationController {
             // Handle general errors
             return "error/500";
         }
-    }
+    }}
 
-    //PHÊ DUYỆT HOẶC TỪ CHỐI YÊU CẦU XÁC THỰC (TOGGLE)
-    @PutMapping("/admin/toggle/{verificationDetailId}")
-    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
-    public ResponseEntity<?> toggleVerificationStatus(
-            @PathVariable Integer verificationDetailId,
-            @RequestBody VerificationToggleRequest request) {
-        try {
 
-            Integer adminUserId = 1;
-            VerificationDetail updatedDetail = verificationService.reviewVerification(
-                    verificationDetailId, request.getIsApproved(), request.getAdminResponse(), adminUserId);
-            return ResponseEntity.ok().body(updatedDetail);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
-    }
-}
+
+

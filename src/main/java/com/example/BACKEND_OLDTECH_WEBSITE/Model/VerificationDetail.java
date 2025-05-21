@@ -8,7 +8,8 @@ import java.sql.Timestamp;
 
 @Entity
 @Table(name = "verification_detail")
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

@@ -9,6 +9,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Verification.VerificationRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -28,11 +29,10 @@ public class UserController {
     public UserController(UserService userService) {
         this.userService = userService;
     }
-    
-    //==============================================
-    //SEARCH ALL & SEARCH BY NAME, EMAIL, PHONE
-    //==============================================
 
+
+
+//LẤY TẤT CẢ DANH SÁCH USER
     @GetMapping("/all")
     public ResponseEntity<?> getAllUsers() {
         try {
@@ -44,6 +44,10 @@ public class UserController {
         }
     }
 
+
+
+
+//TÌM THEO TÊN
     @GetMapping("/search/name")
     public ResponseEntity<?> searchUsersByName(@RequestParam String name) {
         try {
@@ -55,6 +59,10 @@ public class UserController {
         }
     }
 
+
+
+
+//TÌM THEO EMAIL
     @GetMapping("/search/email")
     public ResponseEntity<?> searchUsersByEmail(@RequestParam String email) {
         try {
@@ -66,6 +74,8 @@ public class UserController {
         }
     }
 
+
+//TÌM THEO SDT
     @GetMapping("/search/phone")
     public ResponseEntity<?> searchUsersByPhone(@RequestParam String phoneNumber) {
         try {
@@ -77,11 +87,9 @@ public class UserController {
         }
     }
     
-    //==============================================
-    // INDIVIDUAL USER ENDPOINTS
-    //==============================================
-    
-    // Get a user by ID - 4 admin
+
+
+// LẤY HỒ SƠ CỦA MỘT NGƯỜI (SUPER)ADMIN
     @GetMapping("/{userId}")
     public ResponseEntity<?> getUserById(@RequestParam Integer userId) {
         try {
@@ -97,7 +105,7 @@ public class UserController {
     
 
 
-    // Change password
+//ĐỔI MẬT KHẨU TRONG HỒ SƠ
     @PostMapping("/profile/{userId}/password")
     public ResponseEntity<?> changePassword(@PathVariable Integer userId, @RequestBody ChangePasswordRequest request) {
         try {
@@ -112,7 +120,9 @@ public class UserController {
         }
     }
 
-    // Deactivate account - for users to temporarily disable their account
+
+
+//VÔ HIỆU HÓA TÀI KHOẢN (for CUSTOMER)
     @PostMapping("/profile/{userId}/deactivate") //forever
     public ResponseEntity<?> deactivateAccount(@PathVariable Integer userId) {
         try {
@@ -125,7 +135,53 @@ public class UserController {
         }
     }
 
-    // Request verification
+
+ //ĐÌNH CHỈ TÀI KHOẢN NGƯỜI DÙNG (ĐÌNH CHỈ TỪ TÀI KHOẢN GỐC LÀ CUSTOMER THÌ CHỨC NĂNG SELLER CŨNG BỊ ĐÌNH CHỈ LUÔN)
+    @PostMapping("/admin/users/{userId}/suspend")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> adminSuspendAccount(@PathVariable Integer userId) {
+        try {
+            userService.deactivateAccount(userId, true);
+            return ResponseEntity.ok("Tài khoản người dùng đã bị đình chỉ bởi quản trị viên.");
+        } catch (UsernameNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi đình chỉ tài khoản: " + e.getMessage());
+        }
+    }
+
+
+
+// TỰ KÍCH HOẠT LẠI TÀI KHOẢN (FOR CUSTOMER NẾU HỌ TẠM THỜI VÔ HIỆU HÓA TÀI KHOẢN CỦA MÌNH)
+    @PostMapping("/profile/{userId}/reactivate")
+    public ResponseEntity<?> reactivateAccount(@PathVariable Integer userId) {
+        try {
+            boolean canReactivate = userService.canSelfReactivate(userId);
+            if (!canReactivate) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body("Tài khoản của bạn đã bị đình chỉ bởi quản trị viên. Vui lòng liên hệ quản trị viên để kích hoạt lại.");
+            }
+
+            userService.reactivateAccount(userId);
+            return ResponseEntity.ok("Tài khoản đã được kích hoạt lại thành công.");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi kích hoạt lại tài khoản: " + e.getMessage());
+        }
+    }
+
+// KÍCH HOẠT LẠI TÀI KHOẢN BỞI ADMIN SAU ĐÌNH CHỈ
+    @PostMapping("/admin/users/{userId}/reactivate")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> adminReactivateAccount(@PathVariable Integer userId) {
+        try {
+            userService.reactivateAccount(userId);
+            return ResponseEntity.ok("Tài khoản người dùng đã được kích hoạt lại bởi quản trị viên.");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi kích hoạt lại tài khoản: " + e.getMessage());
+        }
+    }
+
+//YÊU CẦU XÁC THỰC HỒ SƠ, GỬI TỚI ADMIN SAU KHI HOÀN TẤT THÔNG TIN CÁ NHÂN
     @PostMapping("/profile/{userId}/verification")
     public ResponseEntity<?> requestVerification(@PathVariable Integer userId, @RequestBody VerificationRequest verificationRequest) {
         try {
@@ -140,21 +196,10 @@ public class UserController {
         }
     }
 
-    // Check verification status
-    @GetMapping("/profile/{userId}/verification-status")
-    public ResponseEntity<?> getVerificationStatus(@PathVariable Integer userId) {
-        try {
-            Map<String, Object> status = userService.getVerificationStatus(userId);
-            return ResponseEntity.ok(status);
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body("Lỗi khi kiểm tra trạng thái xác thực: " + e.getMessage());
-        }
-    }
 
-    // File a complaint
+
+
+//GỬI ĐƠN KHIẾU NẠI TỚI ADMIN
     @PostMapping("/profile/{userId}/complaints")
     public ResponseEntity<?> fileComplaint(@PathVariable Integer userId, @RequestBody String complaint) {
         try {
@@ -167,7 +212,9 @@ public class UserController {
         }
     }
 
-    // Get user notifications
+
+
+// LẤY CÁC LOẠI THÔNG BÁO
     @GetMapping("/profile/{userId}/notifications")
     public ResponseEntity<?> getNotifications(@PathVariable Integer userId) {
         try {
@@ -180,7 +227,9 @@ public class UserController {
         }
     }
 
-    // Mark notification as read
+
+
+// ĐÁNH DẤU THÔNG BÁO ĐÃ ĐỌC
     @PostMapping("/profile/{userId}/notifications/{notificationId}/read")
     public ResponseEntity<?> markNotificationRead(@PathVariable Integer userId, @PathVariable Long notificationId) {
         try {
