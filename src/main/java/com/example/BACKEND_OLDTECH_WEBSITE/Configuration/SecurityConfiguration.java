@@ -48,34 +48,39 @@ public class SecurityConfiguration {
                     "/oldtech/manager/superadmins"
                 ).permitAll()
 
-                // Admin-only endpoints
+
                 .requestMatchers(
                     "/admin/**",
                     "/oldtech/admin/**",
-                    "/oldtech/verification/admin/**"  // Added verification admin endpoint
+                    "/oldtech/verification/admin/**"
                 ).hasAnyAuthority("Admin", "SuperAdmin")
 
-                // Seller-only endpoints
+                //SELLER-ONLY
                 .requestMatchers("/seller/**", "/oldtech/seller/**")
                     .hasAnyAuthority("Seller", "Admin", "SuperAdmin")
 
-                // SuperAdmin-only endpoints
+                //SUPERADMIN-ONLY
                 .requestMatchers("/oldtech/manager/admins",
                         "/oldtech/manager/**",
                         "/manager/**",
                         "/oldtech/manager/admins/**"
                 ).hasAuthority("SuperAdmin")
 
-                // Customer-specific endpoints that require authentication
+
+                // TODO:CHỈ SEARCH FOR PRODUCT LÀ PUBLIC CÒN SEARCH FOR HUMAN LÀ INTERNAL ACTIVITIES
                 .requestMatchers(
-                    "/customer/profile/**",
-                    "/customer/{userId}",
-                    "/customer/search/{name}",
-                    "/customer/**",
-                    "/oldtech/customer/**"
+                    "/oldtech/customer/all",
+                    "/oldtech/customer/{userId}",
+                    "/oldtech/customer/search/name/{name}",
+                    "/oldtech/customer/search/email/{email}",
+                    "/oldtech/customer/search/phone/{phoneNumber}",
+                    "/oldtech/customer/profile/**",
+                      "/oldtech/customer/search/email/",
+                    "/oldtech/customer/search/phone/",
+                    "/oldtech/customer/search/name/"
                 ).hasAnyAuthority("Customer", "Seller", "Admin", "SuperAdmin")
 
-                // Any other request requires authentication
+
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
@@ -100,10 +105,11 @@ public class SecurityConfiguration {
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
-        
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 }
+
 

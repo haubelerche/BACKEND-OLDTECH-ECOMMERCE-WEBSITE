@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -614,6 +615,19 @@ public class UserService implements UserDetailsService {
         return userRepository.findAll();
     }
 
+    // Add this method to get all active users (not suspended or inactive)
+    public List<User> getAllActiveUsers() {
+        return userRepository.findByAccountStatus(AccountStatusEnum.Active);
+    }
+
+    // Add this method to get all active users that are only customers or sellers
+    public List<User> getAllActiveCustomersAndSellers() {
+        List<User> activeUsers = userRepository.findByAccountStatus(AccountStatusEnum.Active);
+        return activeUsers.stream()
+                .filter(user -> user.getRole() == RoleEnum.Customer || user.getRole() == RoleEnum.Seller)
+                .toList();
+    }
+
     // Search methods
     public List<User> searchUsersByEmail(String email) {
         if (email == null || email.trim().isEmpty()) {
@@ -671,7 +685,7 @@ public class UserService implements UserDetailsService {
     @Transactional(readOnly = true)
     public Map<String, Object> getVerificationStatus(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người d��ng với ID: " + userId));
 
         Map<String, Object> statusInfo = new HashMap<>();
         statusInfo.put("isVerified", user.getIsVerified());
@@ -780,25 +794,68 @@ public class UserService implements UserDetailsService {
 
         user.setAccountStatus(AccountStatusEnum.Suspended);
 
-        // Set suspension end time
+         // Set suspension end time based on admin's request
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime endTime = now.plusHours(request.getDurationInHours());
-        user.setSuspensionEndTime(endTime);
-        user.setSuspensionReason(request.getReason());
 
+        // Only set end time if duration is positive
+        if (request.getDurationInHours() != null && request.getDurationInHours() > 0) {
+            LocalDateTime endTime = now.plusHours(request.getDurationInHours());
+            user.setSuspensionEndTime(endTime);
+        } else {
+            // For permanent suspension, set end time to null
+            user.setSuspensionEndTime(null);
+        }
+
+        // Always set the reason
+        user.setSuspensionReason(request.getReason());
         user.setUpdatedAt(Timestamp.from(Instant.now()));
         userRepository.save(user);
 
         // Send notification to user about suspension
         Notification notification = new Notification();
         notification.setUser(user);
-        notification.setMessage("Tài khoản của bạn đã bị tạm khóa đến " +
-                endTime.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
-                ". Lý do: " + request.getReason());
+
+        // Format the message based on duration
+        String timeMessage;
+        if (request.getDurationInHours() == null || request.getDurationInHours() <= 0) {
+            // Permanent suspension
+            timeMessage = "vĩnh viễn";
+            notification.setMessage("Tài khoản của bạn đã bị tạm khóa " + timeMessage +
+                    ". Lý do: " + request.getReason());
+        } else if (request.getDurationInHours() >= 24 && request.getDurationInHours() % 24 == 0) {
+            // If duration is in days (multiples of 24 hours)
+            int days = request.getDurationInHours() / 24;
+            timeMessage = days + " ngày";
+            notification.setMessage("Tài khoản của bạn đã bị tạm khóa trong " + timeMessage +
+                    ". Thời gian hết hạn: " +
+                    user.getSuspensionEndTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
+                    ". Lý do: " + request.getReason());
+        } else if (request.getDurationInHours() >= 24 * 7 && request.getDurationInHours() % (24 * 7) == 0) {
+            // If duration is in weeks (multiples of 7 days)
+            int weeks = request.getDurationInHours() / (24 * 7);
+            timeMessage = weeks + " tuần";
+            notification.setMessage("Tài khoản của bạn đã bị tạm khóa trong " + timeMessage +
+                    ". Thời gian hết hạn: " +
+                    user.getSuspensionEndTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
+                    ". Lý do: " + request.getReason());
+        } else {
+            // Default to hours
+            timeMessage = request.getDurationInHours() + " giờ";
+            notification.setMessage("Tài khoản của bạn đã bị tạm khóa trong " + timeMessage +
+                    ". Thời gian hết hạn: " +
+                    user.getSuspensionEndTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
+                    ". Lý do: " + request.getReason());
+        }
+
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
         notification.setNotificationType(NotificationTypeEnum.AdminMessage);
         notificationRepository.save(notification);
+
+        log.info("User account {} has been suspended {} for reason: {}",
+                userId, (request.getDurationInHours() != null && request.getDurationInHours() > 0) ?
+                        "until " + user.getSuspensionEndTime() : "permanently",
+                request.getReason());
     }
 
 
@@ -832,8 +889,70 @@ public class UserService implements UserDetailsService {
         }
     }
 
+    /**
+     * Get all suspended users with details about their suspension including
+     * remaining time until reactivation
+     *
+     * @return List of Maps containing user data and suspension details
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getAllSuspendedUsersWithDetails() {
+        // Find all suspended users
+        List<User> suspendedUsers = userRepository.findByAccountStatus(AccountStatusEnum.Suspended);
+        LocalDateTime now = LocalDateTime.now();
 
+        // Transform each user into a Map with additional suspension details
+        return suspendedUsers.stream().map(user -> {
+            Map<String, Object> userMap = new HashMap<>();
+            // Basic user information
+            userMap.put("userId", user.getUserId());
+            userMap.put("email", user.getEmail());
+            userMap.put("firstName", user.getFirstName());
+            userMap.put("lastName", user.getLastName());
+            userMap.put("phoneNumber", user.getPhoneNumber());
+            userMap.put("role", user.getRole());
+            userMap.put("suspensionReason", user.getSuspensionReason());
 
+            // Suspension duration information
+            if (user.getSuspensionEndTime() != null) {
+                userMap.put("suspensionEndTime", user.getSuspensionEndTime());
+                userMap.put("isPermanent", false);
 
+                // Calculate remaining time
+                if (now.isBefore(user.getSuspensionEndTime())) {
+                    Duration remainingTime = Duration.between(now, user.getSuspensionEndTime());
+                    long days = remainingTime.toDays();
+                    long hours = remainingTime.toHoursPart();
+                    long minutes = remainingTime.toMinutesPart();
+
+                    // Format remaining time for display
+                    StringBuilder timeLeftStr = new StringBuilder();
+                    if (days > 0) {
+                        timeLeftStr.append(days).append(" ngày ");
+                    }
+                    if (hours > 0 || days > 0) {
+                        timeLeftStr.append(hours).append(" giờ ");
+                    }
+                    timeLeftStr.append(minutes).append(" phút");
+
+                    userMap.put("remainingTime", timeLeftStr.toString());
+                    userMap.put("remainingHours",
+                        remainingTime.toHours() + (remainingTime.toMinutesPart() > 0 ? 1 : 0)); // Round up
+                } else {
+                    // Suspension has expired but not yet processed by the scheduler
+                    userMap.put("remainingTime", "Suspension expired, pending reactivation");
+                    userMap.put("remainingHours", 0);
+                }
+            } else {
+                // Permanent suspension
+                userMap.put("isPermanent", true);
+                userMap.put("suspensionEndTime", null);
+                userMap.put("remainingTime", "Vĩnh viễn");
+                userMap.put("remainingHours", -1); // Indicates permanent
+            }
+
+            return userMap;
+        }).collect(Collectors.toList());
+    }
 
 }
