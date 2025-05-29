@@ -1,16 +1,13 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 //90%
-// TODO: only superadmin can CRUD admin accounts, the ordinary admin can only update their own account
-
-
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateAdminRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.SuspendUserRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.SuperAdminService;
-import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateSuperAdminRequest;
@@ -22,7 +19,6 @@ import java.util.List;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.Map;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 @RestController
 @RequestMapping("/manager")  // Changed to remove trailing slash
@@ -30,12 +26,10 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 public class SuperAdminController {
 
     private final SuperAdminService superAdminService;
-    private final UserService userService;
 
     @Autowired
-    public SuperAdminController(SuperAdminService superAdminService, UserService userService) {
+    public SuperAdminController(SuperAdminService superAdminService) {
         this.superAdminService = superAdminService;
-        this.userService = userService;
     }
 
 
@@ -132,81 +126,87 @@ public class SuperAdminController {
         }
     }
 
-
-
-
-//ĐÌNH CHỈ TÀI KHOẢN NGƯỜI DÙNG
-    @PostMapping("/users/{userId}/suspend")
-    @PreAuthorize("hasAnyAuthority('SuperAdmin', 'Admin')")
-    public ResponseEntity<?> suspendUserAccount(@PathVariable Integer userId, @Valid @RequestBody SuspendUserRequest request) {
+    // System Settings Management
+    /* 
+    @PostMapping("/system/settings")
+    public ResponseEntity<?> manageSystemSettings(@RequestParam String key, @RequestParam String value) {
         try {
-            // Log the action
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            System.out.println("Admin " + auth.getName() + " suspending user with ID: " + userId);
-            System.out.println("Suspension duration: " + request.getDurationInHours() + " hours, reason: " + request.getReason());
+            superAdminService.manageSystemSettings(key, value);
+            return ResponseEntity.ok("Cài đặt hệ thống đã được cập nhật thành công.");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật cài đặt hệ thống: " + e.getMessage());
+        }
+    }
 
-            // No need to modify the request - let the service handle null/negative values correctly
-            // The service will set null for permanent suspensions
-
-            userService.suspendAccount(userId, request);
-
-            String successMessage;
-            if (request.getDurationInHours() == null || request.getDurationInHours() <= 0) {
-                successMessage = "Tài khoản người dùng đã bị đình chỉ vĩnh viễn.";
-            } else {
-                successMessage = "Tài khoản người dùng đã bị đình chỉ tạm thời trong vòng " + request.getDurationInHours() + " giờ với lý do: " + request.getReason();
-            }
-
-            return ResponseEntity.ok(successMessage);
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+    // System Logs Management
+    @GetMapping("/system/logs")
+    public ResponseEntity<?> viewSystemLogs(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Timestamp startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Timestamp endDate) {
+        try {
+            List<String> logs = superAdminService.viewSystemLogs(startDate, endDate);
+            return ResponseEntity.ok(logs);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Lỗi khi đình chỉ tài khoản người dùng: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi xem nhật ký hệ thống: " + e.getMessage());
         }
     }
 
-
-
-//KÍCH HOẠT LẠI TÀI KHOẢN NGƯỜI DÙNG
-    @PostMapping("/users/{userId}/reactivate")
-    @PreAuthorize("hasAnyAuthority('SuperAdmin', 'Admin')")
-    public ResponseEntity<?> reactivateUserAccount(@PathVariable Integer userId) {
+    // System Notification Management
+    @PostMapping("/system/notifications")
+    public ResponseEntity<?> sendSystemNotification(@RequestParam String message, @RequestParam RoleEnum targetAudience) {
         try {
-            // Log the action
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            System.out.println("Admin " + auth.getName() + " reactivating user with ID: " + userId);
-
-            userService.reactivateAccount(userId);
-            return ResponseEntity.ok("Tài khoản người dùng đã được kích hoạt lại thành công.");
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            superAdminService.sendSystemNotification(message, targetAudience);
+            return ResponseEntity.ok("Thông báo hệ thống đã được gửi thành công.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Lỗi khi kích hoạt lại tài khoản người dùng: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi gửi thông báo hệ thống: " + e.getMessage());
         }
     }
 
-
-//LẤY DANH SÁCH NGƯỜI DÙNG BỊ ĐÌNH CHỈ
-    @GetMapping("/users/suspended")
-    @PreAuthorize("hasAnyAuthority('SuperAdmin', 'Admin')")
-    public ResponseEntity<?> getSuspendedUsers() {
+    // System Report Management
+    @GetMapping("/system/reports")
+    public ResponseEntity<?> generateSystemReport(
+            @RequestParam String reportType,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Timestamp startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Timestamp endDate) {
         try {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            System.out.println("Admin " + auth.getName() + " viewing all suspended users");
-
-            List<Map<String, Object>> suspendedUsersWithDetails = userService.getAllSuspendedUsersWithDetails();
-            return ResponseEntity.ok(suspendedUsersWithDetails);
+            Object report = superAdminService.generateSystemReport(reportType, startDate, endDate);
+            return ResponseEntity.ok(report);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Lỗi khi lấy danh sách người dùng bị đình chỉ: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi tạo báo cáo hệ thống: " + e.getMessage());
         }
     }
-}
+
+    // System Backup Management
+    @PostMapping("/system/backup")
+    public ResponseEntity<?> triggerSystemBackup() {
+        try {
+            String backupStatus = superAdminService.triggerSystemBackup();
+            return ResponseEntity.ok(backupStatus);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi sao lưu hệ thống: " + e.getMessage());
+        }
+    }
+
+    // System Restore Management
+    @PostMapping("/system/restore")
+    public ResponseEntity<?> triggerSystemRestore(@RequestParam String backupId) {
+        try {
+            String restoreStatus = superAdminService.triggerSystemRestore(backupId);
+            return ResponseEntity.ok(restoreStatus);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi khôi phục hệ thống: " + e.getMessage());
+        }
+    }*/
+} 
+
+
+//temporary will update later
 

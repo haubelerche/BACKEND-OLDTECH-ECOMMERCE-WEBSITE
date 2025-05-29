@@ -430,39 +430,17 @@ public class SellerService {
                 throw new IllegalArgumentException("Tài khoản Momo phải có ít nhất 8 ký tự");
             }
             
-            // Get EntityManager from repository
-            jakarta.persistence.EntityManager em = sellerRepository.getEntityManager();
-            
-            // Check if seller record exists using native query
-            Long count = (Long) em.createNativeQuery(
-                "SELECT COUNT(*) FROM seller WHERE seller_id = ?")
-                .setParameter(1, userId)
-                .getSingleResult();
-                    
-            // If record exists, delete it
-            if (count > 0) {
-                em.createNativeQuery("DELETE FROM seller WHERE seller_id = ?")
-                    .setParameter(1, userId)
-                    .executeUpdate();
-                System.out.println("Deleted existing seller record(s) for userId: " + userId);
+            // Check if seller record exists and delete if found
+            boolean sellerExists = sellerRepository.existsById(userId);
+            if (sellerExists) {
+                sellerRepository.deleteById(userId);
+                System.out.println("Deleted existing seller record for userId: " + userId);
             }
             
-            // Create a new seller record
+            // Create timestamp for audit fields
             java.sql.Timestamp now = new java.sql.Timestamp(System.currentTimeMillis());
             
-            em.createNativeQuery(
-                "INSERT INTO seller (seller_id, momo_account, is_approved, account_status, created_at, updated_at, business_status) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?)")
-                .setParameter(1, userId)
-                .setParameter(2, momoAccount)
-                .setParameter(3, false) // not approved
-                .setParameter(4, AccountStatusEnum.Inactive.toString())
-                .setParameter(5, now)
-                .setParameter(6, now)
-                .setParameter(7, (byte)0)
-                .executeUpdate();
-            
-            // Build and return the seller object
+            // Create a new seller entity using builder pattern or constructor
             Seller newSeller = new Seller();
             newSeller.setSellerId(userId);
             newSeller.setMomoAccount(momoAccount);
@@ -472,9 +450,12 @@ public class SellerService {
             newSeller.setUpdatedAt(now);
             newSeller.setBusinessStatus((byte)0);
             
-            System.out.println("New seller record created: " + newSeller.getSellerId());
-            return newSeller;
-            
+            // Save the entity using repository
+            Seller savedSeller = sellerRepository.save(newSeller);
+
+            System.out.println("New seller record created: " + savedSeller.getSellerId());
+            return savedSeller;
+
         } catch (Exception e) {
             System.out.println("Exception in requestToBecomeSeller: " + e.getClass().getName() + ": " + e.getMessage());
             e.printStackTrace();
@@ -532,14 +513,7 @@ public class SellerService {
         return sellerRepository.save(seller);
     }
 
-    /**
-     * Updates the business status of a seller and their account status accordingly.
-     * This method replaces the previous toggleSellingActive and updateBusinessStatus methods.
-     * 
-     * @param sellerId The ID of the seller to update
-     * @param isActive Whether the seller should be active or not (can be boolean or byte)
-     * @return The updated User entity, or null if only the Seller entity was updated
-     */
+ 
     @Transactional
     public User updateSellerStatus(Integer sellerId, Object isActive) {
         // Convert input parameter to byte value
@@ -628,4 +602,77 @@ public class SellerService {
 
         return productRepository.save(product);
     }
+
+    @Transactional
+    public void setUserVerifiedStatus(Integer userId, boolean isVerified) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        user.setIsVerified(isVerified);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+
+        // If verified and the user is a seller, update seller record too
+        if (user.getRole() == RoleEnum.Seller) {
+            sellerRepository.findById(userId).ifPresent(seller -> {
+                if (isVerified) {
+                    seller.setAccountStatus(AccountStatusEnum.Active);
+                }
+                seller.setUpdatedAt(Timestamp.from(Instant.now()));
+                sellerRepository.save(seller);
+            });
+        }
+    }
+
+    @Transactional
+    public void verifySeller(Integer sellerId) {
+        Seller seller = sellerRepository.findById(sellerId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người bán với ID: " + sellerId));
+
+        User user = userRepository.findById(sellerId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng tương ứng với ID: " + sellerId));
+
+        // Update seller record
+        seller.setIsApproved(true);
+        seller.setAccountStatus(AccountStatusEnum.Active);
+        seller.setBusinessStatus((byte)1); // Active
+        seller.setUpdatedAt(Timestamp.from(Instant.now()));
+
+        // Update user record
+        user.setRole(RoleEnum.Seller);
+        user.setIsVerified(true);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+
+        // Save both entities
+        sellerRepository.save(seller);
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void deleteSeller(Integer sellerId) {
+        Seller seller = sellerRepository.findById(sellerId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người bán với ID: " + sellerId));
+
+        User user = userRepository.findById(sellerId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng tương ứng với ID: " + sellerId));
+
+        // Mark all products as invisible
+        productRepository.findBySellerId(sellerId).forEach(p -> {
+            p.setIsVisible(false);
+            productRepository.save(p);
+        });
+
+        // Delete seller record
+        sellerRepository.delete(seller);
+
+        // Reset user role to Customer
+        user.setRole(RoleEnum.Customer);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Seller> getAllSellers() {
+        return sellerRepository.findAll();
+    }
 }
+

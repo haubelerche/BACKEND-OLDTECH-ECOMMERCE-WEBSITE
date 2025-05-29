@@ -38,7 +38,7 @@ public class FileStorageService {
         try {
             Files.createDirectories(this.fileStorageLocation);
         } catch (Exception ex) {
-            throw new RuntimeException("Could not create the directory where the uploaded files will be stored.", ex);
+            throw new RuntimeException("Không thể tạo thư mục lưu trữ các tệp tải lên.", ex);
         }
     }
 
@@ -54,7 +54,7 @@ public class FileStorageService {
         try {
             // Check if the filename contains invalid characters
             if (filename.contains("..")) {
-                throw new RuntimeException("Filename contains invalid path sequence " + filename);
+                throw new RuntimeException("Tên tệp chứa chuỗi đường dẫn không hợp lệ: " + filename);
             }
 
             // Copy file to the target location (replacing existing file with the same name)
@@ -64,22 +64,22 @@ public class FileStorageService {
                 Files.copy(inputStream, targetLocation, StandardCopyOption.REPLACE_EXISTING);
             }
 
-            log.info("File stored successfully: {}", filename);
+            log.info("Tệp đã được lưu thành công: {}", filename);
             return filename;
         } catch (IOException ex) {
-            throw new RuntimeException("Could not store file " + filename + ". Please try again!", ex);
+            throw new RuntimeException("Không thể lưu tệp " + filename + ". Vui lòng thử lại!", ex);
         }
     }
 
     private void validateFile(MultipartFile file) {
         // Check if file is empty
         if (file.isEmpty()) {
-            throw new RuntimeException("Failed to store empty file.");
+            throw new RuntimeException("Không thể lưu tệp trống.");
         }
 
         // Check file size
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new RuntimeException("File size exceeds maximum allowed size of 10MB.");
+            throw new RuntimeException("Kích thước tệp vượt quá giới hạn cho phép là 10MB.");
         }
 
         // Check file extension
@@ -87,7 +87,7 @@ public class FileStorageService {
         String extension = getFileExtension(originalFilename).toLowerCase();
 
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new RuntimeException("File type not allowed. Allowed types: " +
+            throw new RuntimeException("Loại tệp không được phép. Loại tệp cho phép: " +
                     String.join(", ", ALLOWED_EXTENSIONS));
         }
     }
@@ -107,10 +107,10 @@ public class FileStorageService {
         try {
             Path filePath = fileStorageLocation.resolve(filename).normalize();
             Files.deleteIfExists(filePath);
-            log.info("File deleted successfully: {}", filename);
+            log.info("Tệp đã được xóa thành công: {}", filename);
         } catch (IOException ex) {
-            log.error("Error deleting file: {}", filename, ex);
-            throw new RuntimeException("Could not delete file " + filename, ex);
+            log.error("Lỗi xóa tệp: {}", filename, ex);
+            throw new RuntimeException("Không thể xóa tệp " + filename, ex);
         }
     }
 }

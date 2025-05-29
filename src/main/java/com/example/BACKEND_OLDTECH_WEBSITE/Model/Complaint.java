@@ -9,6 +9,8 @@ import java.sql.Timestamp;
 @Entity
 @Table(name = "complaint")
 @Data
+@Setter
+@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

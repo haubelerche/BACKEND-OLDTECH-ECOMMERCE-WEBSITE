@@ -30,6 +30,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 public class SecurityConfiguration {
 
     private final JWTAuthenticationFilter jwtAuthFilter;
+    private final OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -67,7 +68,7 @@ public class SecurityConfiguration {
                 ).hasAuthority("SuperAdmin")
 
 
-                // TODO:CHỈ SEARCH FOR PRODUCT LÀ PUBLIC CÒN SEARCH FOR HUMAN LÀ INTERNAL ACTIVITIES
+                // TODO: SEARCH FOR PRODUCT LÀ PUBLIC; SEARCH FOR SELLER LÀ CUSTOMER ACTIVITIES; SEARCH FOR HUMAN LÀ ADMIN ACTIVITIES
                 .requestMatchers(
                     "/oldtech/customer/all",
                     "/oldtech/customer/{userId}",
@@ -86,7 +87,15 @@ public class SecurityConfiguration {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .oauth2Login(oauth2 -> oauth2
+                .successHandler(oauth2AuthenticationSuccessHandler)
+                .failureUrl("/oauth2/failure?error=Authentication failed")
+                .authorizationEndpoint(endpoint -> endpoint
+                    .baseUri("/oauth2/authorization"))
+                .redirectionEndpoint(endpoint -> endpoint
+                    .baseUri("/login/oauth2/code/*"))
+            );
 
         return http.build();
     }
@@ -111,5 +120,4 @@ public class SecurityConfiguration {
         return source;
     }
 }
-
 

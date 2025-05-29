@@ -34,13 +34,13 @@ public class SuperAdminService {
     @Transactional
     public User createAdminAccount(CreateAdminRequest request) {
         if (!request.getEmail().startsWith("staffotech")) {
-            throw new IllegalArgumentException("Admin email must start with 'staffotech'.");
+            throw new IllegalArgumentException("Email quản trị viên phải đúng format.");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already exists: " + request.getEmail());
+            throw new IllegalArgumentException("Email đã tồn tại: " + request.getEmail());
         }
         if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
-            throw new IllegalArgumentException("Phone number already exists: " + request.getPhoneNumber());
+            throw new IllegalArgumentException("Số điện thoại đã tồn tại: " + request.getPhoneNumber());
         }
 
         User admin = new User();
@@ -64,13 +64,13 @@ public class SuperAdminService {
     @Transactional
     public User createSuperAdminAccount(CreateSuperAdminRequest request) {
         if (!request.getEmail().startsWith("managerotech")) {
-            throw new IllegalArgumentException("SuperAdmin email must start with 'managerotech'.");
+            throw new IllegalArgumentException("Email của SuperAdmin phải bắt đầu bằng format quy định.");
         }
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already exists: " + request.getEmail());
+            throw new IllegalArgumentException("Email đã tồn tại: " + request.getEmail());
         }
         if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
-            throw new IllegalArgumentException("Phone number already exists: " + request.getPhoneNumber());
+            throw new IllegalArgumentException("Số điện thoại đã tồn tại: " + request.getPhoneNumber());
         }
 
         User superAdmin = new User();
@@ -93,42 +93,38 @@ public class SuperAdminService {
     @Transactional
     public void deleteAdminAccount(Integer adminUserId) {
         User admin = userRepository.findById(adminUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Admin user not found with ID: " + adminUserId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy tài khoản Admin với ID: " + adminUserId));
 
         // Check if the user is actually an Admin
         if (admin.getRole() != RoleEnum.Admin) {
-            throw new IllegalArgumentException("User with ID: " + adminUserId + " is not an Admin.");
+            throw new IllegalArgumentException("Tài khoản với ID: " + adminUserId + " không phải là Admin.");
         }
 
-        // Instead of physically deleting, mark as deleted and anonymize data
-        admin.setAccountStatus(AccountStatusEnum.Deleted);
-        admin.setUpdatedAt(Timestamp.from(Instant.now()));
-
-        // Save the updated user instead of deleting
-        userRepository.save(admin);
+        // Permanently delete the admin account from the database
+        userRepository.delete(admin);
     }
 
     //update admin account (basic info, not password or role here)
     @Transactional
     public User updateAdminAccount(Integer adminUserId, CreateAdminRequest request) { // Can create a specific UpdateAdminRequest DTO if fields differ significantly
         User admin = userRepository.findById(adminUserId)
-                .orElseThrow(() -> new EntityNotFoundException("Admin user not found with ID: " + adminUserId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy tài khoản Admin với ID: " + adminUserId));
 
         if (admin.getRole() != RoleEnum.Admin) {
-            throw new IllegalArgumentException("User with ID: " + adminUserId + " is not an Admin.");
+            throw new IllegalArgumentException("Tài khoản với ID: " + adminUserId + " không phải là Admin.");
         }
 
         // Check for email uniqueness if it's being changed
         if (!admin.getEmail().equals(request.getEmail())) {
             if (userRepository.existsByEmail(request.getEmail())) {
-                throw new IllegalArgumentException("New email already exists: " + request.getEmail());
+                throw new IllegalArgumentException("Email mới đã tồn tại: " + request.getEmail());
             }
             admin.setEmail(request.getEmail());
         }
         
         // Check for phone number uniqueness if it's being changed
         if (!admin.getPhoneNumber().equals(request.getPhoneNumber()) && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
-             throw new IllegalArgumentException("Số điện thoại đã tồn tại: " + request.getPhoneNumber());
+             throw new IllegalArgumentException("Số điện thoại mới đã tồn tại: " + request.getPhoneNumber());
         }
 
         admin.setFirstName(request.getFirstName());
@@ -148,7 +144,7 @@ public class SuperAdminService {
 
     //manage system settings
     public void manageSystemSettings(String settingKey, String settingValue) {
-        System.out.println("SuperAdminService: Managing system setting - Key: " + settingKey + ", Value: " + settingValue);
+        System.out.println("SuperAdminService: Quản lý cài đặt hệ thống - Key: " + settingKey + ", Value: " + settingValue);
         //SettingsRepository.save(new SystemSetting(settingKey, settingValue));
     }
 

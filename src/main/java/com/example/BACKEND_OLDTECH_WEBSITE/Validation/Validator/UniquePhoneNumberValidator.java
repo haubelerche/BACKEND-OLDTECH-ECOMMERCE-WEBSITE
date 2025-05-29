@@ -14,12 +14,25 @@ public class UniquePhoneNumberValidator implements ConstraintValidator<UniquePho
     private UserRepository userRepository;
 
     @Override
-    public boolean isValid(String phone_number, ConstraintValidatorContext context) {
+    public void initialize(UniquePhoneNumber constraintAnnotation) {
+        // No initialization needed
+    }
+
+    @Override
+    public boolean isValid(String phoneNumber, ConstraintValidatorContext context) {
         try {
-            if (phone_number == null) {
+            // Null values should be validated with @NotNull
+            if (phoneNumber == null) {
                 return true;
             }
-            return !userRepository.existsByPhoneNumber(phone_number);
+
+            // Skip validation for placeholder phone numbers used during OAuth registration
+            if (phoneNumber.startsWith("placeholder_")) {
+                return true;
+            }
+
+            // Check if the phone number exists in the database
+            return !userRepository.existsByPhoneNumber(phoneNumber);
         } catch (Exception e) {
             // Log the exception if you have a logger
             // logger.error("Error validating unique phone number: " + e.getMessage(), e);
@@ -27,3 +40,4 @@ public class UniquePhoneNumberValidator implements ConstraintValidator<UniquePho
         }
     }
 }
+

@@ -26,8 +26,8 @@ public class CartItemService {
     private Integer resolveCartIdForUser(Integer userId) {
 
         userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User not found with ID: " + userId));
-        System.out.println("Warning: Using placeholder logic for resolveCartIdForUser. userId is used as cartId: " + userId);
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+        System.out.println("Cảnh báo: Sử dụng logic thay thế " + userId);
         return userId;
     }
 

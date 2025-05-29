@@ -4,6 +4,7 @@ import lombok.Data;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.AssertTrue;
 
 @Data
 public class SellerRegisterRequest {
@@ -13,4 +14,8 @@ public class SellerRegisterRequest {
     
     @NotNull(message = "ID người dùng không được để trống")
     private Integer userId;
+
+    @AssertTrue(message = "Bạn phải đồng ý với chính sách người bán của O' Tech để tiếp tục")
+    private Boolean policyAgreement;
 }
+

@@ -18,6 +18,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 @Component
 @RequiredArgsConstructor
@@ -47,19 +50,37 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
                 jwtCookie.setSecure(request.isSecure());
                 response.addCookie(jwtCookie);
                 
-                // Also send user info back
+                // Also send user info in a safe way
                 String userJson = objectMapper.writeValueAsString(tokenResponse.getUser());
-                Cookie userInfoCookie = new Cookie("user_info", userJson);
+                String encodedUserInfo = Base64.getEncoder().encodeToString(userJson.getBytes(StandardCharsets.UTF_8));
+                Cookie userInfoCookie = new Cookie("user_info", encodedUserInfo);
                 userInfoCookie.setPath("/");
                 userInfoCookie.setMaxAge(3600);
                 response.addCookie(userInfoCookie);
                 
-                log.info("OAuth2 authentication successful, redirecting to: {}", targetUrl);
+                // Set a registration status cookie for frontend to detect
+                boolean isNewRegistration = tokenResponse.getUser().getPhoneNumber() == null
+                    || tokenResponse.getUser().getDob() == null;
+                String registrationStatus = isNewRegistration ? "incomplete" : "complete";
+
+                Cookie registrationStatusCookie = new Cookie("registration_status", registrationStatus);
+                registrationStatusCookie.setPath("/");
+                registrationStatusCookie.setMaxAge(3600);
+                response.addCookie(registrationStatusCookie);
+
+                // Add user ID in a separate cookie for easy access
+                Cookie userIdCookie = new Cookie("user_id", tokenResponse.getUser().getUserId().toString());
+                userIdCookie.setPath("/");
+                userIdCookie.setMaxAge(3600);
+                response.addCookie(userIdCookie);
+
+                log.info("OAuth2 authentication successful for user: {}, redirecting to: {}",
+                        tokenResponse.getUser().getEmail(), targetUrl);
                 getRedirectStrategy().sendRedirect(request, response, targetUrl);
             } catch (Exception e) {
                 log.error("OAuth2 authentication error: {}", e.getMessage());
                 String errorUrl = UriComponentsBuilder.fromUriString(frontendUrl + "/login")
-                    .queryParam("error", "Authentication failed: " + e.getMessage())
+                    .queryParam("error", "Authentication failed: " + URLEncoder.encode(e.getMessage(), StandardCharsets.UTF_8))
                     .build().toUriString();
                 getRedirectStrategy().sendRedirect(request, response, errorUrl);
             }
@@ -69,19 +90,22 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     }
     
     private String determineTargetUrl(TokenResponse tokenResponse) {
-        boolean isProfileComplete = tokenResponse.getUser().getPhoneNumber() != null &&
-                tokenResponse.getUser().getDob() != null;
-        
+        // Check if profile is incomplete but allow login anyway
+        boolean isProfileIncomplete = tokenResponse.getUser().getPhoneNumber() == null ||
+                tokenResponse.getUser().getDob() == null;
+
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(frontendUrl);
         String targetUrl;
         
-        if (!isProfileComplete) {
-            // Redirect to complete profile page
-            targetUrl = builder.path("/complete-profile")
+        if (isProfileIncomplete) {
+            // Redirect to dashboard with a notification flag to show profile completion reminder
+            targetUrl = builder.path("/dashboard")
+                .queryParam("isProfileIncomplete", "true")
                 .queryParam("userId", tokenResponse.getUser().getUserId())
+                .queryParam("email", URLEncoder.encode(tokenResponse.getUser().getEmail(), StandardCharsets.UTF_8))
                 .build().toUriString();
         } else {
-            // Redirect to home page or dashboard
+            // Redirect to dashboard without notification
             targetUrl = builder.path("/dashboard")
                 .build().toUriString();
         }
@@ -105,3 +129,4 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         }
     }
 }
+

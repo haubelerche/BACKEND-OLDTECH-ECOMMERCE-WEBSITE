@@ -1,5 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
-//100% ready
+//100%
 //FOR ADMIN GANG ONLY
 import java.util.List;
 import java.util.Optional;

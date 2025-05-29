@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.Random;
 
 @Service
 public class UserService implements UserDetailsService {
@@ -180,38 +181,102 @@ public class UserService implements UserDetailsService {
 
     @Transactional
     public User processOAuth2User(OAuth2User oauth2User, String provider) {
+        // Normalize provider name correctly to match enum values exactly
+        AuthProvider normalizedProvider;
+        if (provider.equalsIgnoreCase("google")) {
+            normalizedProvider = AuthProvider.google;
+        } else if (provider.equalsIgnoreCase("facebook")) {
+            normalizedProvider = AuthProvider.facebook;
+        } else {
+            normalizedProvider = AuthProvider.local; // Default fallback
+            log.warn("Unknown OAuth2 provider: {}. Defaulting to 'local'", provider);
+        }
+
         final String email = oauth2User.getAttribute("email");
-        final String providerId = extractProviderId(oauth2User, provider);
-        
-      
+        final String providerId = extractProviderId(oauth2User, normalizedProvider.name());
+
         final String accessToken = oauth2User.getAttribute("access_token");
         final String refreshToken = oauth2User.getAttribute("refresh_token");
         final Timestamp tokenExpiryTimestamp = extractTokenExpiry(oauth2User);
         
-       
-        final String pictureUrl = extractProfilePicture(oauth2User, provider);
-        
-        log.info("Processing OAuth2 user with email: {}, provider: {}", email, provider);
-        
-        User user = userRepository.findByEmail(email)
-            .orElseGet(() -> createNewOAuth2User(oauth2User, email, provider, providerId, accessToken, refreshToken, tokenExpiryTimestamp, pictureUrl));
+        final String pictureUrl = extractProfilePicture(oauth2User, normalizedProvider.name());
 
-      
-        updateOAuth2UserInfo(user, provider, providerId, accessToken, refreshToken, tokenExpiryTimestamp, pictureUrl);
-        
-        log.info("Updated OAuth2 tokens for user: {}, provider: {}", email, provider);
-        return userRepository.save(user);
+        log.info("Processing OAuth2 user with email: {}, provider: {}", email, normalizedProvider);
+
+        // Check if the user exists with the email regardless of auth provider
+        Optional<User> existingUserOpt = userRepository.findByEmail(email);
+
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            log.info("Found existing user with email {}, auth provider: {}", email, existingUser.getAuthProvider());
+
+            // Check if this is a locally registered user trying to use OAuth2
+            if (existingUser.getAuthProvider() != null &&
+                existingUser.getAuthProvider() == AuthProvider.local) {
+                // Link the OAuth2 provider to this local account
+                log.info("Linking OAuth2 {} provider to existing local account: {}", normalizedProvider, email);
+                existingUser.setAuthProvider(normalizedProvider);
+                existingUser.setAuthProviderId(providerId);
+                existingUser.setAuthProviderToken(accessToken);
+                existingUser.setAuthProviderRefreshToken(refreshToken);
+                existingUser.setAuthProviderTokenExpires(tokenExpiryTimestamp);
+
+                // Update avatar if user doesn't have one
+                if (existingUser.getAvatarUrl() == null && pictureUrl != null) {
+                    existingUser.setAvatarUrl(pictureUrl);
+                }
+
+                // We need to preserve the existing password for hybrid login capability
+                return existingUser;
+            }
+
+            // Update OAuth2 info for existing OAuth2 user
+            updateOAuth2UserInfo(existingUser, normalizedProvider, providerId, accessToken, refreshToken,
+                               tokenExpiryTimestamp, pictureUrl);
+
+            return existingUser;
+        }
+
+        // Create new user if not found
+        User newUser = createNewOAuth2User(oauth2User, email, normalizedProvider, providerId, accessToken,
+                                         refreshToken, tokenExpiryTimestamp, pictureUrl);
+
+        log.info("Created new OAuth2 user: {}", email);
+        return userRepository.save(newUser);
     }
-    
+
     private String extractProviderId(OAuth2User oauth2User, String provider) {
+        // First try standard "sub" claim
         String providerId = oauth2User.getAttribute("sub");
+
+        // For Facebook the ID is usually just "id"
         if (providerId == null) {
-       
             providerId = oauth2User.getAttribute("id");
         }
+
+        // If still null, try looking in other common locations
+        if (providerId == null && "facebook".equalsIgnoreCase(provider)) {
+            log.debug("Attempting to find Facebook provider ID in alternate locations");
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> profileMap = oauth2User.getAttribute("profile");
+                if (profileMap != null && profileMap.containsKey("id")) {
+                    providerId = (String) profileMap.get("id");
+                }
+            } catch (Exception e) {
+                log.warn("Error extracting Facebook provider ID: {}", e.getMessage());
+            }
+        }
+
+        if (providerId == null) {
+            // Generate a fallback ID if everything else fails
+            providerId = "oauth2_" + System.currentTimeMillis();
+            log.warn("Could not extract provider ID for {}. Using generated ID: {}", provider, providerId);
+        }
+
         return providerId;
     }
-    
+
     private Timestamp extractTokenExpiry(OAuth2User oauth2User) {
         Long tokenExpires = oauth2User.getAttribute("token_expires");
         if (tokenExpires != null) {
@@ -221,265 +286,152 @@ public class UserService implements UserDetailsService {
             return Timestamp.from(Instant.now().plusSeconds(3600));
         }
     }
-    
+
     private String extractProfilePicture(OAuth2User oauth2User, String provider) {
         if ("google".equals(provider)) {
             return oauth2User.getAttribute("picture");
         } else if ("facebook".equals(provider)) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> picture = oauth2User.getAttribute("picture");
-            if (picture != null) {
+            // Facebook can return picture in different formats
+            try {
+                // Try to get it from picture object format
                 @SuppressWarnings("unchecked")
-                Map<String, Object> data = (Map<String, Object>) picture.get("data");
-                if (data != null) {
-                    return (String) data.get("url");
+                Map<String, Object> picture = oauth2User.getAttribute("picture");
+                if (picture != null) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = (Map<String, Object>) picture.get("data");
+                    if (data != null) {
+                        return (String) data.get("url");
+                    }
                 }
+
+                // Try direct URL format
+                String directPictureUrl = oauth2User.getAttribute("picture");
+                if (directPictureUrl != null && directPictureUrl.startsWith("http")) {
+                    return directPictureUrl;
+                }
+
+                // Try looking for profile image in other formats
+                @SuppressWarnings("unchecked")
+                Map<String, Object> profileMap = oauth2User.getAttribute("profile");
+                if (profileMap != null && profileMap.containsKey("picture")) {
+                    return (String) profileMap.get("picture");
+                }
+            } catch (Exception e) {
+                log.warn("Error extracting Facebook profile picture: {}", e.getMessage());
             }
         }
         return null;
     }
-    
-    private User createNewOAuth2User(OAuth2User oauth2User, String email, String provider, 
-                                   String providerId, String accessToken, String refreshToken, 
+
+    private User createNewOAuth2User(OAuth2User oauth2User, String email, AuthProvider provider,
+                                   String providerId, String accessToken, String refreshToken,
                                    Timestamp tokenExpiryTimestamp, String pictureUrl) {
         User newUser = new User();
-        newUser.setEmail(email);
-        
-        // Split the name into first and last name ..
+        newUser.setEmail(email != null ? email : "oauth2_" + UUID.randomUUID().toString() + "@placeholder.com");
+
+        // Extract name from OAuth2 provider or create placeholder values
         String fullName = oauth2User.getAttribute("name");
-        if (fullName == null) {
-            fullName = email != null ? email.split("@")[0] : "User"; 
+        if (fullName == null || fullName.trim().isEmpty()) {
+            // If no name is provided, use email prefix or generate placeholder
+            fullName = (email != null) ? email.split("@")[0] : "User_" + UUID.randomUUID().toString().substring(0, 8);
         }
+
+        // Always ensure we have first and last name values to satisfy @NotBlank constraints
         String[] nameParts = fullName.split(" ", 2);
         newUser.setFirstName(nameParts[0]);
-        newUser.setLastName(nameParts.length > 1 ? nameParts[1] : "");
-        
-        newUser.setAuthProvider(AuthProvider.valueOf(provider.toUpperCase()));
+        newUser.setLastName(nameParts.length > 1 ? nameParts[1] : "User");
+
+        // Generate a valid phone number for OAuth2 users that matches the pattern ^\\+?[0-9]{10,15}$
+        // Just using digits to comply with the validation pattern
+        String randomDigits = generateRandomDigits(12);  // Generate 12 random digits
+        String oauthPhone = "+" + randomDigits;  // Add + prefix to make it look like an international number
+        newUser.setPhoneNumber(oauthPhone);
+
+        // Set auth provider information
+        newUser.setAuthProvider(provider);
         newUser.setAuthProviderId(providerId);
         newUser.setAuthProviderToken(accessToken);
         newUser.setAuthProviderRefreshToken(refreshToken);
         newUser.setAuthProviderTokenExpires(tokenExpiryTimestamp);
+
+        // Set profile picture if available
         newUser.setAvatarUrl(pictureUrl);
+
+        // Set account status and role
         newUser.setAccountStatus(AccountStatusEnum.Active);
         newUser.setRole(RoleEnum.Customer);
-        newUser.setIsVerified(false); // Require manual verification
-        newUser.setCreatedAt(Timestamp.from(Instant.now()));
-        newUser.setUpdatedAt(Timestamp.from(Instant.now()));
-        newUser.setLastLogin(Timestamp.from(Instant.now()));
-        
-        log.info("Created new user via OAuth2 provider: {}", provider);
+        newUser.setIsVerified(false);
+
+        // Set timestamps
+        Timestamp now = Timestamp.from(Instant.now());
+        newUser.setCreatedAt(now);
+        newUser.setUpdatedAt(now);
+        newUser.setLastLogin(now);
+
+        log.info("Created new user via OAuth2 provider: {}, with placeholder phone: {}",
+                provider.name(), oauthPhone);
+
         return newUser;
     }
-    
-    private void updateOAuth2UserInfo(User user, String provider, String providerId, 
-                                    String accessToken, String refreshToken, 
+
+    // Helper method to generate random digits for phone number
+    private String generateRandomDigits(int length) {
+        StringBuilder sb = new StringBuilder(length);
+        Random random = new Random();
+        // First digit shouldn't be 0
+        sb.append(1 + random.nextInt(9));
+
+        // Rest of the digits
+        for (int i = 1; i < length; i++) {
+            sb.append(random.nextInt(10));
+        }
+        return sb.toString();
+    }
+
+    private void updateOAuth2UserInfo(User user, AuthProvider provider, String providerId,
+                                    String accessToken, String refreshToken,
                                     Timestamp tokenExpiryTimestamp, String pictureUrl) {
-        user.setAuthProvider(AuthProvider.valueOf(provider.toUpperCase()));
+        // Use the provider enum directly
+        user.setAuthProvider(provider);
         user.setAuthProviderId(providerId);
         user.setAuthProviderToken(accessToken);
         user.setAuthProviderRefreshToken(refreshToken);
         user.setAuthProviderTokenExpires(tokenExpiryTimestamp);
-        
+
         // Update avatar URL if not set or if from same provider
-        if (user.getAvatarUrl() == null || 
-            (pictureUrl != null && user.getAuthProvider().name().equalsIgnoreCase(provider))) {
+        if (user.getAvatarUrl() == null ||
+            (pictureUrl != null && user.getAuthProvider() == provider)) {
             user.setAvatarUrl(pictureUrl);
         }
-        
+
         user.setLastLogin(Timestamp.from(Instant.now()));
     }
 
-    public User getUserById(Integer userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-    }
-    
-    public User getUserByEmail(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
-    }
-    
-    public User getUserByPhoneNumber(String phoneNumber) {
-        User user = userRepository.findByPhoneNumber(phoneNumber);
-        if (user == null) {
-            throw new UsernameNotFoundException("Không tìm thấy người dùng với số điện thoại: " + phoneNumber);
-        }
-        return user;
+    // Get all users method
+    public List<User> getAllUsers() {
+        return userRepository.findAll();
     }
 
-    @Transactional
-    public void deactivateAccount(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-        user.setAccountStatus(AccountStatusEnum.Inactive);
-        user.setUpdatedAt(Timestamp.from(Instant.now())); 
-        userRepository.save(user);
-    }
-    
-    @Transactional
-    public void deleteAccount(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-
-        log.info("Starting deletion process for user ID: {}", userId);
-
-        // --- Delete dependent entities FIRST --- 
-        try {
-            // Notifications
-            List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
-            if (!notifications.isEmpty()) {
-                notificationRepository.deleteAll(notifications);
-                log.info("Deleted {} notifications for user {}", notifications.size(), userId);
-            }
-
-            // Complaints (as complainant)
-            List<Complaint> complaintsAsComplainant = complaintRepository.findByComplainantId(userId);
-            if (!complaintsAsComplainant.isEmpty()) {
-                complaintRepository.deleteAll(complaintsAsComplainant);
-                log.info("Deleted {} complaints (as complainant) for user {}", complaintsAsComplainant.size(), userId);
-            }
-            // Consider handling complaints where user is respondent if necessary
-            // List<Complaint> complaintsAsRespondent = complaintRepository.findByRespondentId(userId);
-            // handle complaintsAsRespondent...
-
-            // Verification Details
-            verificationDetailRepository.findByUser(user).ifPresent(detail -> {
-                verificationDetailRepository.delete(detail);
-                log.info("Deleted verification details for user {}", userId);
-            });
-
-            // Addresses
-            List<Address> addresses = addressRepository.findByUserId(userId); 
-            if (!addresses.isEmpty()) {
-                addressRepository.deleteAll(addresses);
-                log.info("Deleted {} addresses for user {}", addresses.size(), userId);
-            }
-
-            // Orders
-            List<Orders> orders = orderRepository.findByUserId(userId);
-            if (!orders.isEmpty()) {
-                 // Assuming OrderDetail is handled by cascade or is deleted here if needed
-                 orderRepository.deleteAll(orders); 
-                 log.info("Deleted {} orders for user {}", orders.size(), userId);
-            }
-
-            // Refunds
-            List<Refund> refunds = refundRepository.findByUserId(userId);
-            if (!refunds.isEmpty()) {
-                refundRepository.deleteAll(refunds);
-                log.info("Deleted {} refunds for user {}", refunds.size(), userId);
-            }
-            
-            // --- Handle Seller related data --- 
-            if (user.getRole() == RoleEnum.Seller) {
-                 log.info("User {} is a seller. Proceeding with seller data cleanup.", userId);
-                 
-                 // Find seller record (assuming sellerId = userId)
-                 Optional<Seller> sellerOpt = sellerRepository.findById(userId);
-                 if (sellerOpt.isPresent()) {
-                     Seller seller = sellerOpt.get();
-                     Integer sellerId = seller.getSellerId();
-                     
-                     // Find and delete Products associated with this seller
-                     List<Product> products = productRepository.findBySellerId(sellerId);
-                     if (!products.isEmpty()) {
-                         log.info("Found {} products for seller ID {}. Deleting products and their images.", products.size(), sellerId);
-                         for (Product product : products) {
-                             // Delete Product Images first
-                             List<ProductImage> productImages = productImageRepository.findByProductOrderByDisplayOrderAsc(product);
-                             if (!productImages.isEmpty()) {
-                                 // TODO: Add logic here to delete images from storage (S3, local, etc.)
-                                 productImageRepository.deleteAll(productImages);
-                                 log.info("Deleted {} images for product ID {}", productImages.size(), product.getProductId());
-                             }
-                             // Delete Product
-                             productRepository.delete(product);
-                         }
-                         log.info("Finished deleting products for seller ID {}", sellerId);
-                     }
-                     
-                     // TODO: Delete Reviews where this seller is the sellerId if necessary
-                     
-                     // Delete the Seller record itself
-                     sellerRepository.delete(seller);
-                     log.info("Deleted seller record for seller ID {}", sellerId);
-                 } else {
-                     log.warn("User {} has Seller role but no corresponding Seller record found with ID {}. Skipping seller cleanup.", userId, userId);
-                 }
-            }
-
-            // --- Anonymize the User entity LAST --- 
-            user.setAccountStatus(AccountStatusEnum.Deleted);
-            user.setEmail("deleted_" + userId + "@anonymized.com");
-            user.setPhoneNumber(null);
-            user.setFirstName("Deleted");
-            user.setLastName("User");
-            user.setPassword(null); // Consider security implications
-            user.setAvatarUrl(null);
-            user.setRefundMomoAccount(null);
-            user.setAuthProvider(null);
-            user.setAuthProviderId(null);
-            user.setAuthProviderToken(null);
-            user.setAuthProviderRefreshToken(null);
-            user.setAuthProviderTokenExpires(null);
-            user.setRole(RoleEnum.Customer); // Reset role?
-            user.setIsVerified(false);
-            user.setUpdatedAt(Timestamp.from(Instant.now()));
-
-            userRepository.save(user);
-            log.info("User account {} has been successfully anonymized and marked as Deleted.", userId);
-
-        } catch (Exception e) {
-            log.error("Error during deletion process for user account {}: {}", userId, e.getMessage(), e);
-            // Let Spring handle rollback due to @Transactional
-            throw new RuntimeException("Lỗi khi xóa tài khoản: " + e.getMessage(), e);
+    // Search methods
+    public List<User> searchUsersByName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            return userRepository.findAll();
         }
+        return userRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(name, name);
     }
 
-    @Transactional
-    public User updateUserProfile(Integer userId, UpdateUserProfileRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+    public List<User> searchUsersByEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return userRepository.findByEmailContainingIgnoreCase(email);
+    }
 
-        if (request.getFirstName() != null) {
-            user.setFirstName(request.getFirstName());
+    public List<User> searchUsersByPhoneNumber(String phoneNumber) {
+        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
+            return new ArrayList<>();
         }
-        if (request.getLastName() != null) {
-            user.setLastName(request.getLastName());
-        }
-
-        // Handle Email Change with Uniqueness Check
-        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
-            if (userRepository.existsByEmail(request.getEmail())) {
-                throw new IllegalArgumentException("Email " + request.getEmail() + " đã tồn tại.");
-            }
-            // Add regex pattern check if needed here, though @Pattern on User model handles it at persistence
-            user.setEmail(request.getEmail());
-        }
-
-        // Handle Phone Number Change with Uniqueness Check
-        if (request.getPhoneNumber() != null && !request.getPhoneNumber().equals(user.getPhoneNumber())) {
-            if (userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
-                throw new IllegalArgumentException("Số điện thoại " + request.getPhoneNumber() + " đã tồn tại.");
-            } // Add regex pattern check if needed here, though @Pattern on User model handles it at persistence
-            user.setPhoneNumber(request.getPhoneNumber());
-        }
-
-        if (request.getDob() != null) {
-            user.setDob(new java.sql.Date(request.getDob().getTime()));
-        }
-        if (request.getAvatarUrl() != null) {
-            user.setAvatarUrl(request.getAvatarUrl());
-        }
-        
-        // Handle RefundMomoAccount Change
-        if (request.getRefundMomoAccount() != null) {
-            user.setRefundMomoAccount(request.getRefundMomoAccount());
-        }
-
-     
-        user.setUpdatedAt(Timestamp.from(Instant.now()));
-        return userRepository.save(user);
+        return userRepository.findByPhoneNumberContaining(phoneNumber);
     }
 
     @Transactional
@@ -489,7 +441,7 @@ public class UserService implements UserDetailsService {
 
         // Verify old password
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new IllegalArgumentException("Mật khẩu cũ không chính xác."); // Or a custom exception
+            throw new IllegalArgumentException("Mật khẩu cũ không chính xác.");
         }
 
         // Update to new password
@@ -499,156 +451,12 @@ public class UserService implements UserDetailsService {
     }
 
     @Transactional
-    public void requestVerification(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId));
-
-        if (user.getIsVerified()) {
-            System.out.println("Người dùng " + userId + " đã được xác thực.");
-          
-            // throw new IllegalStateException("User is already verified.");
-        } else {
-            // Send a notification about the verification request
-            sendVerificationRequestSubmittedNotification(user);
-            
-            System.out.println("Yêu cầu xác thực đã được gửi cho người dùng ID: " + userId + ". Chờ phê duyệt từ quản trị viên.");
-            // user.setVerificationStatus(VerificationStatus.PENDING_APPROVAL); // Example if you have such a field
-            // userRepository.save(user); // If any user state was changed
-        }
-    }
-    
-    private void sendVerificationRequestSubmittedNotification(User user) {
-        Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setMessage("Yêu cầu xác thực tài khoản của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.");
-        notification.setCreatedAt(Timestamp.from(Instant.now()));
-        notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
-        notificationRepository.save(notification);
-        
-        log.info("Sent verification request submitted notification to user ID: {}", user.getUserId());
-    }
-
-    @Transactional
-    public void fileComplaint(Integer userId, String complaintText) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot file complaint."));
-
-        Complaint newComplaint = new Complaint();
-        newComplaint.setComplainantId(userId);
-        newComplaint.setReason(complaintText);
-        newComplaint.setStatus(ComplaintStatus.Pending);
-        newComplaint.setCreatedAt(Timestamp.from(Instant.now()));
-        newComplaint.setUpdatedAt(Timestamp.from(Instant.now()));
-        complaintRepository.save(newComplaint);
-
-        System.out.println("Đơn khiếu nại đã được gửi bởi người dùng ID: " + userId + ". Khiếu nại: '" + complaintText + "'. Đây sẽ được lưu vào cơ sở dữ liệu.");
-    }
-
-    @Transactional(readOnly = true) 
-    public List<Notification> getNotifications(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot retrieve notifications."));
-        return notificationRepository.findByUserOrderByCreatedAtDesc(user);
-    }
-
-    @Transactional
-    public void markNotificationRead(Integer userId, Long notificationId) {
-        User user = userRepository.findById(userId)
-            .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot mark notification."));
-
-        Notification notification = notificationRepository.findById(notificationId)
-            .orElseThrow(() -> new EntityNotFoundException("Notification not found with ID: " + notificationId)); // Consider creating a specific NotificationNotFoundException
-
-        // Verify the notification belongs to the user
-        if (!notification.getUser().getUserId().equals(user.getUserId())) {
-            throw new SecurityException("User " + userId + " is not authorized to mark notification " + notificationId + " as read."); // Or a more specific access denied exception
-        }
-
-        if (!notification.isRead()) {
-            notification.setRead(true);
-            notificationRepository.save(notification);
-            System.out.println("Notification " + notificationId + " marked as read for user " + userId);
-        } else {
-            System.out.println("Notification " + notificationId + " was already marked as read for user " + userId);
-        }
-    }
-
-    @Transactional
-    public User updateUserForOAuth2(User user) {
-        return userRepository.save(user);
-    }
-
-    @Transactional
-    public User updateUserRole(Integer userId, RoleEnum newRole) {
+    public void deactivateAccount(Integer userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-        
-        RoleEnum oldRole = user.getRole();
-        user.setRole(newRole);
+        user.setAccountStatus(AccountStatusEnum.Inactive);
         user.setUpdatedAt(Timestamp.from(Instant.now()));
-        
-        User updatedUser = userRepository.save(user);
-        
-        // If user becomes a seller, send notification
-        if (newRole == RoleEnum.Seller && oldRole != RoleEnum.Seller) {
-            sendSellerRoleRequestNotification(updatedUser);
-        }
-        
-        return updatedUser;
-    }
-    
-    private void sendSellerRoleRequestNotification(User user) {
-        Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setMessage("Yêu cầu xác thực tài khoản người bán của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.");
-        notification.setCreatedAt(Timestamp.from(Instant.now()));
-        notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
-        notificationRepository.save(notification);
-        
-        log.info("Sent seller role request notification to user ID: {}", user.getUserId());
-    }
-
-    // Add this method to get all users
-    public List<User> getAllUsers() {
-        return userRepository.findAll();
-    }
-
-    // Add this method to get all active users (not suspended or inactive)
-    public List<User> getAllActiveUsers() {
-        return userRepository.findByAccountStatus(AccountStatusEnum.Active);
-    }
-
-    // Add this method to get all active users that are only customers or sellers
-    public List<User> getAllActiveCustomersAndSellers() {
-        List<User> activeUsers = userRepository.findByAccountStatus(AccountStatusEnum.Active);
-        return activeUsers.stream()
-                .filter(user -> user.getRole() == RoleEnum.Customer || user.getRole() == RoleEnum.Seller)
-                .toList();
-    }
-
-    // Search methods
-    public List<User> searchUsersByEmail(String email) {
-        if (email == null || email.trim().isEmpty()) {
-            return new ArrayList<>();
-        }
-        return userRepository.findByEmailContainingIgnoreCase(email);
-    }
-    
-    public List<User> searchUsersByPhoneNumber(String phoneNumber) {
-        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
-            return new ArrayList<>();
-        }
-        return userRepository.findByPhoneNumberContaining(phoneNumber);
-    }
-    
-    public List<User> searchUsersByName(String name) {
-        if (name == null || name.trim().isEmpty()) {
-            return userRepository.findAll();
-        }
-        
-        return userRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(name, name);
+        userRepository.save(user);
     }
 
     @Transactional
@@ -682,20 +490,203 @@ public class UserService implements UserDetailsService {
         return savedDetail;
     }
 
+    @Transactional
+    public void fileComplaint(Integer userId, String complaintText) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot file complaint."));
+
+        Complaint newComplaint = new Complaint();
+        newComplaint.setComplainantId(userId);
+        newComplaint.setReason(complaintText);
+        newComplaint.setStatus(ComplaintStatus.Pending);
+        newComplaint.setCreatedAt(Timestamp.from(Instant.now()));
+        newComplaint.setUpdatedAt(Timestamp.from(Instant.now()));
+        complaintRepository.save(newComplaint);
+
+        log.info("Đơn khiếu nại đã được gửi bởi người dùng ID: {}", userId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Notification> getNotifications(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Người dùng không tồn tại với ID: " + userId + ", không thể lấy thông báo."));
+        return notificationRepository.findByUserOrderByCreatedAtDesc(user);
+    }
+
+    @Transactional
+    public void markNotificationRead(Integer userId, Long notificationId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId + ", không thể đánh dấu thông báo."));
+
+        Notification notification = notificationRepository.findById(notificationId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông báo với ID: " + notificationId));
+
+        // Verify the notification belongs to the user
+        if (!notification.getUser().getUserId().equals(user.getUserId())) {
+            throw new SecurityException("Người dùng " + userId + " không được phép đánh dấu thông báo " + notificationId + " là đã đọc.");
+        }
+
+        if (!notification.isRead()) {
+            notification.setRead(true);
+            notificationRepository.save(notification);
+            log.info("Thông báo {} đã được đánh dấu là đã đọc cho người dùng {}", notificationId, userId);
+        } else {
+            log.info("Thông báo {} đã được đánh dấu là đã đọc trước đó cho người dùng {}", notificationId, userId);
+        }
+    }
+
+    @Transactional
+    public void deleteAccount(Integer userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        log.info("Starting deletion process for user ID: {}", userId);
+
+        // --- Delete dependent entities FIRST ---
+        try {
+            // Notifications
+            List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
+            if (!notifications.isEmpty()) {
+                notificationRepository.deleteAll(notifications);
+                log.info("Deleted {} notifications for user {}", notifications.size(), userId);
+            }
+
+            // Complaints (as complainant)
+            List<Complaint> complaintsAsComplainant = complaintRepository.findByComplainantId(userId);
+            if (!complaintsAsComplainant.isEmpty()) {
+                complaintRepository.deleteAll(complaintsAsComplainant);
+                log.info("Deleted {} complaints (as complainant) for user {}", complaintsAsComplainant.size(), userId);
+            }
+
+            // Verification Details
+            verificationDetailRepository.findByUser(user).ifPresent(detail -> {
+                verificationDetailRepository.delete(detail);
+                log.info("Deleted verification details for user {}", userId);
+            });
+
+            // Addresses
+            List<Address> addresses = addressRepository.findByUserId(userId);
+            if (!addresses.isEmpty()) {
+                addressRepository.deleteAll(addresses);
+                log.info("Deleted {} addresses for user {}", addresses.size(), userId);
+            }
+
+            // Orders
+            List<Orders> orders = orderRepository.findByUserId(userId);
+            if (!orders.isEmpty()) {
+                 // Assuming OrderDetail is handled by cascade or is deleted here if needed
+                 orderRepository.deleteAll(orders);
+                 log.info("Deleted {} orders for user {}", orders.size(), userId);
+            }
+
+            // Refunds
+            List<Refund> refunds = refundRepository.findByUserId(userId);
+            if (!refunds.isEmpty()) {
+                refundRepository.deleteAll(refunds);
+                log.info("Deleted {} refunds for user {}", refunds.size(), userId);
+            }
+
+            // --- Handle Seller related data ---
+            if (user.getRole() == RoleEnum.Seller) {
+                 log.info("User {} is a seller. Proceeding with seller data cleanup.", userId);
+
+                 // Find seller record (assuming sellerId = userId)
+                 Optional<Seller> sellerOpt = sellerRepository.findById(userId);
+                 if (sellerOpt.isPresent()) {
+                     Seller seller = sellerOpt.get();
+                     Integer sellerId = seller.getSellerId();
+
+                     // Find and delete Products associated with this seller
+                     List<Product> products = productRepository.findBySellerId(sellerId);
+                     if (!products.isEmpty()) {
+                         log.info("Found {} products for seller ID {}. Deleting products and their images.", products.size(), sellerId);
+                         for (Product product : products) {
+                             // Delete Product Images first
+                             List<ProductImage> productImages = productImageRepository.findByProductOrderByDisplayOrderAsc(product);
+                             if (!productImages.isEmpty()) {
+                                 // TODO: Add logic here to delete images from storage (S3, local, etc.)
+                                 productImageRepository.deleteAll(productImages);
+                                 log.info("Deleted {} images for product ID {}", productImages.size(), product.getProductId());
+                             }
+                             // Delete Product
+                             productRepository.delete(product);
+                         }
+                         log.info("Finished deleting products for seller ID {}", sellerId);
+                     }
+
+                     // Delete the Seller record itself
+                     sellerRepository.delete(seller);
+                     log.info("Deleted seller record for seller ID {}", sellerId);
+                 } else {
+                     log.warn("User {} has Seller role but no corresponding Seller record found with ID {}. Skipping seller cleanup.", userId, userId);
+                 }
+            }
+
+            // --- Anonymize the User entity LAST ---
+            user.setAccountStatus(AccountStatusEnum.Deleted);
+            user.setEmail("deleted_" + userId + "@anonymized.com");
+            user.setPhoneNumber(null);
+            user.setFirstName("Deleted");
+            user.setLastName("User");
+            user.setPassword(null); // Consider security implications
+            user.setAvatarUrl(null);
+            user.setRefundMomoAccount(null);
+            user.setAuthProvider(null);
+            user.setAuthProviderId(null);
+            user.setAuthProviderToken(null);
+            user.setAuthProviderRefreshToken(null);
+            user.setAuthProviderTokenExpires(null);
+            user.setRole(RoleEnum.Customer); // Reset role
+            user.setIsVerified(false);
+            user.setUpdatedAt(Timestamp.from(Instant.now()));
+
+            userRepository.save(user);
+            log.info("User account {} has been successfully anonymized and marked as Deleted.", userId);
+
+        } catch (Exception e) {
+            log.error("Error during deletion process for user account {}: {}", userId, e.getMessage(), e);
+            throw new RuntimeException("Lỗi khi xóa tài khoản: " + e.getMessage(), e);
+        }
+    }
+
+    private void sendVerificationRequestSubmittedNotification(User user) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Yêu cầu xác thực tài khoản của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.");
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        notificationRepository.save(notification);
+
+        log.info("Sent verification request submitted notification to user ID: {}", user.getUserId());
+    }
+
+    @Transactional
+    public User updateUserForOAuth2(User user) {
+        log.info("Updating user for OAuth2: {}", user.getEmail());
+        return userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public User getUserById(Integer userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+    }
+
     @Transactional(readOnly = true)
     public Map<String, Object> getVerificationStatus(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người d��ng với ID: " + userId));
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
 
         Map<String, Object> statusInfo = new HashMap<>();
         statusInfo.put("isVerified", user.getIsVerified());
 
-        // Get verification detail if exists
+        // Get verification detail if it exists
         verificationDetailRepository.findByUser(user).ifPresent(detail -> {
             statusInfo.put("verificationDetailId", detail.getVerifyId());
-            statusInfo.put("documentSubmitted", detail.getSelfiePicUrl() != null && 
-                                               detail.getFrontImageUrl() != null && 
-                                               detail.getBackImageUrl() != null);
+            statusInfo.put("documentSubmitted", detail.getSelfiePicUrl() != null &&
+                                              detail.getFrontImageUrl() != null &&
+                                              detail.getBackImageUrl() != null);
             statusInfo.put("updatedAt", detail.getUpdatedAt());
             statusInfo.put("createdAt", detail.getCreatedAt());
         });
@@ -705,254 +696,61 @@ public class UserService implements UserDetailsService {
 
     @Transactional
     public void updateProfilePicture(Integer userId, String imageUrl) {
+        log.info("Updating profile picture for user ID: {}", userId);
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-        
+
         user.setAvatarUrl(imageUrl);
         user.setUpdatedAt(Timestamp.from(Instant.now()));
         userRepository.save(user);
-        
-        log.info("Đã cập nhật ảnh đại diện cho người dùng ID: {}", userId);
+
+        log.info("Profile picture updated successfully for user ID: {}", userId);
     }
 
-    @Transactional
-    public String createPasswordResetTokenForUser(User user) {
-        String token = UUID.randomUUID().toString();
-        PasswordResetToken existingToken = passwordResetTokenRepository.findByUser(user).orElse(null);
-        if (existingToken != null) {
-            existingToken.setToken(token);
-            existingToken.setExpiryDate(existingToken.calculateExpiryDate(PasswordResetToken.EXPIRATION)); // Recalculate expiry
-            passwordResetTokenRepository.save(existingToken);
-        } else {
-            PasswordResetToken myToken = new PasswordResetToken(token, user);
-            passwordResetTokenRepository.save(myToken);
-        }
-        return token;
-    }
-
-    public PasswordResetToken getPasswordResetToken(String token) {
-        return passwordResetTokenRepository.findByToken(token).orElse(null);
-    }
-
-    public User getUserByPasswordResetToken(String token) {
-        PasswordResetToken passToken = passwordResetTokenRepository.findByToken(token).orElse(null);
-        if (passToken == null) {
-            return null;
-        }
-        return passToken.getUser();
-    }
-
-    public void changeUserPassword(User user, String newPassword) {
-        user.setPassword(passwordEncoder.encode(newPassword)); // Make sure to hash the new password
-        userRepository.save(user);
-        // Invalidate the token after successful password change
-        passwordResetTokenRepository.findByUser(user).ifPresent(passwordResetTokenRepository::delete);
-    }
-
-    // Add method to get user by email if it doesn't exist for AuthenticationService
+    @Transactional(readOnly = true)
     public User findUserByEmail(String email) {
+        log.info("Finding user by email: {}", email);
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
     }
 
-
     @Transactional
-    public void deactivateAccount(Integer userId, boolean isAdminAction) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+    public String createPasswordResetTokenForUser(User user) {
+        log.info("Creating password reset token for user: {}", user.getEmail());
 
-        if (isAdminAction) {
-            user.setAccountStatus(AccountStatusEnum.Suspended); // Admin ban/suspension
-        } else {
-            user.setAccountStatus(AccountStatusEnum.Inactive); // User self-deactivation
-        }
+        // Delete any existing token for this user
+        passwordResetTokenRepository.deleteByUser(user);
 
-        user.setUpdatedAt(Timestamp.from(Instant.now()));
-        userRepository.save(user);
+        // Generate a unique token
+        String token = UUID.randomUUID().toString();
+
+        // Create a new token with expiration (default: 24 hours)
+        PasswordResetToken resetToken = new PasswordResetToken();
+        resetToken.setToken(token);
+        resetToken.setUser(user);
+        resetToken.setExpiryDate(Timestamp.from(Instant.now().plus(Duration.ofHours(24))));
+
+        passwordResetTokenRepository.save(resetToken);
+
+        log.info("Password reset token created for user ID: {}", user.getUserId());
+        return token;
     }
 
-    @Transactional
-    public boolean canSelfReactivate(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-        return user.getAccountStatus() != AccountStatusEnum.Suspended; // Can't reactivate if suspended by admin
-    }
-
-    @Transactional
-    public void reactivateAccount(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-        user.setAccountStatus(AccountStatusEnum.Active);
-        user.setUpdatedAt(Timestamp.from(Instant.now()));
-        userRepository.save(user);
-    }
-
-    @Transactional
-    public void suspendAccount(Integer userId, SuspendUserRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-
-        user.setAccountStatus(AccountStatusEnum.Suspended);
-
-         // Set suspension end time based on admin's request
-        LocalDateTime now = LocalDateTime.now();
-
-        // Only set end time if duration is positive
-        if (request.getDurationInHours() != null && request.getDurationInHours() > 0) {
-            LocalDateTime endTime = now.plusHours(request.getDurationInHours());
-            user.setSuspensionEndTime(endTime);
-        } else {
-            // For permanent suspension, set end time to null
-            user.setSuspensionEndTime(null);
-        }
-
-        // Always set the reason
-        user.setSuspensionReason(request.getReason());
-        user.setUpdatedAt(Timestamp.from(Instant.now()));
-        userRepository.save(user);
-
-        // Send notification to user about suspension
-        Notification notification = new Notification();
-        notification.setUser(user);
-
-        // Format the message based on duration
-        String timeMessage;
-        if (request.getDurationInHours() == null || request.getDurationInHours() <= 0) {
-            // Permanent suspension
-            timeMessage = "vĩnh viễn";
-            notification.setMessage("Tài khoản của bạn đã bị tạm khóa " + timeMessage +
-                    ". Lý do: " + request.getReason());
-        } else if (request.getDurationInHours() >= 24 && request.getDurationInHours() % 24 == 0) {
-            // If duration is in days (multiples of 24 hours)
-            int days = request.getDurationInHours() / 24;
-            timeMessage = days + " ngày";
-            notification.setMessage("Tài khoản của bạn đã bị tạm khóa trong " + timeMessage +
-                    ". Thời gian hết hạn: " +
-                    user.getSuspensionEndTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
-                    ". Lý do: " + request.getReason());
-        } else if (request.getDurationInHours() >= 24 * 7 && request.getDurationInHours() % (24 * 7) == 0) {
-            // If duration is in weeks (multiples of 7 days)
-            int weeks = request.getDurationInHours() / (24 * 7);
-            timeMessage = weeks + " tuần";
-            notification.setMessage("Tài khoản của bạn đã bị tạm khóa trong " + timeMessage +
-                    ". Thời gian hết hạn: " +
-                    user.getSuspensionEndTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
-                    ". Lý do: " + request.getReason());
-        } else {
-            // Default to hours
-            timeMessage = request.getDurationInHours() + " giờ";
-            notification.setMessage("Tài khoản của bạn đã bị tạm khóa trong " + timeMessage +
-                    ". Thời gian hết hạn: " +
-                    user.getSuspensionEndTime().format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) +
-                    ". Lý do: " + request.getReason());
-        }
-
-        notification.setCreatedAt(Timestamp.from(Instant.now()));
-        notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
-        notificationRepository.save(notification);
-
-        log.info("User account {} has been suspended {} for reason: {}",
-                userId, (request.getDurationInHours() != null && request.getDurationInHours() > 0) ?
-                        "until " + user.getSuspensionEndTime() : "permanently",
-                request.getReason());
-    }
-
-
-    private void validateUserStatus(User user) {
-        if (user.getAccountStatus() == AccountStatusEnum.Suspended) {
-            LocalDateTime now = LocalDateTime.now();
-            if (user.getSuspensionEndTime() != null && now.isBefore(user.getSuspensionEndTime())) {
-                // Calculate remaining time
-                Duration duration = Duration.between(now, user.getSuspensionEndTime());
-                long hours = duration.toHours();
-                long minutes = duration.toMinutesPart();
-
-                String timeRemaining = hours + " giờ " + minutes + " phút";
-                String reason = user.getSuspensionReason() != null ? user.getSuspensionReason() : "Vi phạm quy định của nền tảng";
-
-                throw new AccountSuspendedException(
-                        "Tài khoản của bạn đã bị tạm khóa. Thời gian còn lại: " +
-                                timeRemaining + ". Lý do: " + reason);
-            } else if (user.getSuspensionEndTime() != null && now.isAfter(user.getSuspensionEndTime())) {
-                // Suspension is over, reactivate the account
-                user.setAccountStatus(AccountStatusEnum.Active);
-                user.setSuspensionEndTime(null);
-                user.setSuspensionReason(null);
-                userRepository.save(user);
-            } else {
-                // Indefinite suspension (no end time)
-                throw new AccountSuspendedException(
-                        "Tài khoản của bạn đã bị tạm khóa vô thời hạn. Lý do: " +
-                                (user.getSuspensionReason() != null ? user.getSuspensionReason() : "Vi phạm quy định của nền tảng"));
-            }
-        }
-    }
-
-    /**
-     * Get all suspended users with details about their suspension including
-     * remaining time until reactivation
-     *
-     * @return List of Maps containing user data and suspension details
-     */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getAllSuspendedUsersWithDetails() {
-        // Find all suspended users
-        List<User> suspendedUsers = userRepository.findByAccountStatus(AccountStatusEnum.Suspended);
-        LocalDateTime now = LocalDateTime.now();
-
-        // Transform each user into a Map with additional suspension details
-        return suspendedUsers.stream().map(user -> {
-            Map<String, Object> userMap = new HashMap<>();
-            // Basic user information
-            userMap.put("userId", user.getUserId());
-            userMap.put("email", user.getEmail());
-            userMap.put("firstName", user.getFirstName());
-            userMap.put("lastName", user.getLastName());
-            userMap.put("phoneNumber", user.getPhoneNumber());
-            userMap.put("role", user.getRole());
-            userMap.put("suspensionReason", user.getSuspensionReason());
-
-            // Suspension duration information
-            if (user.getSuspensionEndTime() != null) {
-                userMap.put("suspensionEndTime", user.getSuspensionEndTime());
-                userMap.put("isPermanent", false);
-
-                // Calculate remaining time
-                if (now.isBefore(user.getSuspensionEndTime())) {
-                    Duration remainingTime = Duration.between(now, user.getSuspensionEndTime());
-                    long days = remainingTime.toDays();
-                    long hours = remainingTime.toHoursPart();
-                    long minutes = remainingTime.toMinutesPart();
-
-                    // Format remaining time for display
-                    StringBuilder timeLeftStr = new StringBuilder();
-                    if (days > 0) {
-                        timeLeftStr.append(days).append(" ngày ");
-                    }
-                    if (hours > 0 || days > 0) {
-                        timeLeftStr.append(hours).append(" giờ ");
-                    }
-                    timeLeftStr.append(minutes).append(" phút");
-
-                    userMap.put("remainingTime", timeLeftStr.toString());
-                    userMap.put("remainingHours",
-                        remainingTime.toHours() + (remainingTime.toMinutesPart() > 0 ? 1 : 0)); // Round up
-                } else {
-                    // Suspension has expired but not yet processed by the scheduler
-                    userMap.put("remainingTime", "Suspension expired, pending reactivation");
-                    userMap.put("remainingHours", 0);
-                }
-            } else {
-                // Permanent suspension
-                userMap.put("isPermanent", true);
-                userMap.put("suspensionEndTime", null);
-                userMap.put("remainingTime", "Vĩnh viễn");
-                userMap.put("remainingHours", -1); // Indicates permanent
-            }
-
-            return userMap;
-        }).collect(Collectors.toList());
+    public PasswordResetToken getPasswordResetToken(String token) {
+        log.info("Retrieving password reset token");
+        return passwordResetTokenRepository.findByToken(token)
+                .filter(resetToken -> resetToken.getExpiryDate().after(new Timestamp(System.currentTimeMillis())))
+                .orElse(null);
     }
 
+    @Transactional
+    public void changeUserPassword(User user, String newPassword) {
+        log.info("Changing password for user: {}", user.getEmail());
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        userRepository.save(user);
+        log.info("Password changed successfully for user ID: {}", user.getUserId());
+    }
 }
+

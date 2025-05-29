@@ -141,20 +141,20 @@ public class ProductImageService {
         
         // Validate product exists
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found with ID: " + productId));
+                .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy sản phẩm với ID: " + productId));
         
         // Validate number of images
         if (files == null || files.size() < MIN_IMAGES_REQUIRED) {
-            throw new IllegalArgumentException("At least " + MIN_IMAGES_REQUIRED + " images are required");
+            throw new IllegalArgumentException("Ít nhất " + MIN_IMAGES_REQUIRED + " hình ảnh là bắt buộc");
         }
         
         if (files.size() > MAX_IMAGES_ALLOWED) {
-            throw new IllegalArgumentException("Maximum " + MAX_IMAGES_ALLOWED + " images are allowed");
+            throw new IllegalArgumentException("Tối đa " + MAX_IMAGES_ALLOWED + " hình ảnh được phép");
         }
         
         // Validate thumbnail index
         if (thumbnailIndex == null || thumbnailIndex < 0 || thumbnailIndex >= files.size()) {
-            throw new IllegalArgumentException("Invalid thumbnail index");
+            throw new IllegalArgumentException("Chỉ số hình ảnh chính không hợp lệ");
         }
         
         List<ProductImage> savedImages = new ArrayList<>();
@@ -165,13 +165,13 @@ public class ProductImageService {
             
             // Validate file size
             if (file.getSize() > MAX_FILE_SIZE) {
-                throw new IllegalArgumentException("File '" + file.getOriginalFilename() + "' exceeds maximum size of 10MB");
+                throw new IllegalArgumentException("Tệp '" + file.getOriginalFilename() + "' vượt quá kích thước tối đa là 10MB");
             }
             
             // Validate file type
             String contentType = file.getContentType();
             if (contentType == null || !contentType.startsWith("image/")) {
-                throw new IllegalArgumentException("File '" + file.getOriginalFilename() + "' is not an image");
+                throw new IllegalArgumentException("Tệp '" + file.getOriginalFilename() + "' không phải là hình ảnh");
             }
             
             // Generate unique filename
@@ -194,21 +194,21 @@ public class ProductImageService {
 
     public ProductImage getProductThumbnail(Integer productId) {
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + productId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + productId));
         return productImageRepository.findByProductAndIsPrimaryTrue(product)
-                .orElseThrow(() -> new EntityNotFoundException("Thumbnail not found for product: " + productId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy hình ảnh chính cho sản phẩm: " + productId));
     }
  
     @Transactional
     public void deleteAllProductImages(Integer productId) {
   
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + productId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + productId));
         
 
         if (Boolean.TRUE.equals(product.getIsApproved()) || 
                 product.getStatus() == ProductStatusEnum.Approved) {
-            throw new IllegalStateException("Cannot delete images from an approved product");
+            throw new IllegalStateException("Không thể xóa hình ảnh từ sản phẩm đã được phê duyệt");
         }
         
         List<ProductImage> images = productImageRepository.findByProductOrderByDisplayOrderAsc(product);
@@ -221,7 +221,7 @@ public class ProductImageService {
     @Transactional
     public void updateProductThumbnail(Integer productId, Integer imageId) {
         Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new EntityNotFoundException("Product not found with ID: " + productId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + productId));
        
         List<ProductImage> images = productImageRepository.findByProductOrderByDisplayOrderAsc(product);
         for (ProductImage image : images) {
@@ -231,10 +231,10 @@ public class ProductImageService {
         
         // Set new thumbnail
         ProductImage newThumbnail = productImageRepository.findById(imageId)
-                .orElseThrow(() -> new EntityNotFoundException("Image not found with ID: " + imageId));
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy hình ảnh với ID: " + imageId));
         
         if (!newThumbnail.getProduct().equals(product)) {
-            throw new IllegalArgumentException("Image does not belong to this product");
+            throw new IllegalArgumentException("Hình ảnh không thuộc về sản phẩm này");
         }
         
         newThumbnail.setIsPrimary(true);

@@ -8,15 +8,15 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Exception.AccountSuspendedException;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.PasswordResetToken;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 
-
+//TODO: DOMAIN IN HERE
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.AuthenticationException;
+
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -33,16 +33,12 @@ public class AuthenticationService {
     private final UserService userService;
 
     public Map<String, String> loginUser(@Valid LoginRequest loginRequest) {
-        // Check if the user is suspended before attempting authentication
         User user = userService.findUserByEmail(loginRequest.getEmail());
 
-        // Check for suspension status
         if (user.getAccountStatus() == AccountStatusEnum.Suspended) {
-            // If suspended, check if it's temporary or permanent
             LocalDateTime now = LocalDateTime.now();
             if (user.getSuspensionEndTime() != null) {
                 if (now.isBefore(user.getSuspensionEndTime())) {
-                    // Calculate remaining time
                     Duration duration = Duration.between(now, user.getSuspensionEndTime());
                     long hours = duration.toHours();
                     long minutes = duration.toMinutesPart();
@@ -76,6 +72,11 @@ public class AuthenticationService {
                 )
         );
         SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        // Update last login timestamp after successful authentication
+        user.setLastLogin(new java.sql.Timestamp(System.currentTimeMillis()));
+        userService.updateUserForOAuth2(user);
+
         String jwt = tokenProvider.generateToken(authentication);
         String refreshToken = tokenProvider.generateRefreshToken(loginRequest.getEmail());
 
@@ -94,8 +95,8 @@ public class AuthenticationService {
         User user = userService.findUserByEmail(email);
         String token = userService.createPasswordResetTokenForUser(user);
 
-        System.out.println("Password Reset Token for " + user.getEmail() + ": " + token);
-        System.out.println("Reset URL (simulation): http://yourfrontenddomain.com/reset-password?token=" + token);
+        System.out.println("Mã đặt lại mật khẩu cho " + user.getEmail() + ": " + token);
+        System.out.println("URL đặt lại mật khẩu (mô phỏng): http://yourfrontenddomain.com/reset-password?token=" + token);
 
         return "Nếu email của bạn tồn tại trong hệ thống, một liên kết đặt lại mật khẩu đã được gửi.";
     }
@@ -117,3 +118,4 @@ public class AuthenticationService {
     }
 }
 
+//TODO: dùng 1 email cố định and real to send message

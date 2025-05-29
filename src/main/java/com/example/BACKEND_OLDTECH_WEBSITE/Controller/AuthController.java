@@ -7,7 +7,6 @@ import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.ForgotPasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.ResetPasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Configuration.JWTProvider;
-import com.example.BACKEND_OLDTECH_WEBSITE.Exception.AccountSuspendedException;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.AuthenticationService;
 import jakarta.validation.Valid;
@@ -50,37 +49,30 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {
-            // First check if the user exists and is suspended before attempting authentication
-            try {
-                // Get the user first to check if it exists
-                userService.findUserByEmail(loginRequest.getEmail());
-            } catch (UsernameNotFoundException e) {
+            Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                    loginRequest.getEmail(),
+                    loginRequest.getPassword()
+                )
+            );
 
-                return ResponseEntity.badRequest().body("Email hoặc mật khẩu không đúng");
-            }
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = tokenProvider.generateToken(authentication);
+            String refreshToken = tokenProvider.generateRefreshToken(loginRequest.getEmail());
 
-            try {
-                Map<String, String> tokens = authenticationService.loginUser(loginRequest);
-                return ResponseEntity.ok(tokens);
-            } catch (AccountSuspendedException e) {
-                // Explicitly handle the suspension exception
-                return ResponseEntity.status(403).body(e.getMessage());
-            }
+            Map<String, String> response = new HashMap<>();
+            response.put("accessToken", jwt);
+            response.put("refreshToken", refreshToken);
+            response.put("tokenType", "Bearer");
+
+            return ResponseEntity.ok(response);
         } catch (BadCredentialsException e) {
-            // Bad credentials exception
             return ResponseEntity.badRequest().body("Email hoặc mật khẩu không đúng");
         } catch (Exception e) {
-            // Check if the cause is an AccountSuspendedException
-            Throwable cause = e.getCause();
-            if (cause instanceof AccountSuspendedException) {
-                return ResponseEntity.status(403).body(cause.getMessage());
-            }
-            // Other generic errors
             return ResponseEntity.badRequest().body("Đăng nhập thất bại: " + e.getMessage());
         }
     }
 
-//TODO: HOW TO KNOW IF A PERSON TRY TO CREATE A NEW ACCOUNT WHEN HER OLD ONE IS SUSPENDED
 
 //ĐĂNG KÝ
     @PostMapping("/register")

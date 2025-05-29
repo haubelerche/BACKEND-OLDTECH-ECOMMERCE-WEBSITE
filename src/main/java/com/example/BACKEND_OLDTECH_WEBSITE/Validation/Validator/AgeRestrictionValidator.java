@@ -4,28 +4,41 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Validation.Interface.AgeRestriction;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
 import org.springframework.stereotype.Component;
+
 import java.time.LocalDate;
 import java.time.Period;
-import java.util.Date;
 import java.time.ZoneId;
+import java.util.Date;
 
 @Component
 public class AgeRestrictionValidator implements ConstraintValidator<AgeRestriction, Date> {
 
     @Override
-    public boolean isValid(Date dob, ConstraintValidatorContext context) {
+    public void initialize(AgeRestriction constraintAnnotation) {
+        // No initialization needed
+    }
+
+    @Override
+    public boolean isValid(Date dateOfBirth, ConstraintValidatorContext context) {
         try {
-            if (dob == null) {
-                return false;
+            // Null values should be validated with @NotNull
+            if (dateOfBirth == null) {
+                return true;
             }
 
-            LocalDate birthDate = dob.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-            LocalDate today = LocalDate.now();
-            int age = Period.between(birthDate, today).getYears();
+            // Convert Date to LocalDate
+            LocalDate birthDate = dateOfBirth.toInstant()
+                    .atZone(ZoneId.systemDefault())
+                    .toLocalDate();
+            LocalDate now = LocalDate.now();
 
+            // Calculate age
+            int age = Period.between(birthDate, now).getYears();
+
+            // Check if user is at least 18 years old
             return age >= 18;
         } catch (Exception e) {
-            // Log the exception if you have a logger
+            // Log error if needed
             // logger.error("Error validating age restriction: " + e.getMessage(), e);
             return false;
         }
