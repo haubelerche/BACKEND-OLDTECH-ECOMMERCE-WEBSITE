@@ -192,8 +192,23 @@ public class UserService implements UserDetailsService {
             log.warn("Unknown OAuth2 provider: {}. Defaulting to 'local'", provider);
         }
 
-        final String email = oauth2User.getAttribute("email");
+        // Facebook sometimes doesn't provide email if permissions aren't granted
+        // or if the user hasn't verified their email on Facebook
+        String email = oauth2User.getAttribute("email");
         final String providerId = extractProviderId(oauth2User, normalizedProvider.name());
+
+        // Handle case where Facebook doesn't return email attribute
+        if (email == null && normalizedProvider == AuthProvider.facebook) {
+            log.warn("Facebook OAuth2 login - email attribute is null");
+            // Generate a placeholder email using the Facebook ID
+            if (providerId != null) {
+                email = "facebook_" + providerId + "@placeholder.com";
+                log.info("Generated placeholder email for Facebook user: {}", email);
+            } else {
+                email = "facebook_" + UUID.randomUUID().toString() + "@placeholder.com";
+                log.info("Generated fallback placeholder email for Facebook user: {}", email);
+            }
+        }
 
         final String accessToken = oauth2User.getAttribute("access_token");
         final String refreshToken = oauth2User.getAttribute("refresh_token");
@@ -227,14 +242,14 @@ public class UserService implements UserDetailsService {
                 }
 
                 // We need to preserve the existing password for hybrid login capability
-                return existingUser;
+                return userRepository.save(existingUser);
             }
 
             // Update OAuth2 info for existing OAuth2 user
             updateOAuth2UserInfo(existingUser, normalizedProvider, providerId, accessToken, refreshToken,
                                tokenExpiryTimestamp, pictureUrl);
 
-            return existingUser;
+            return userRepository.save(existingUser);
         }
 
         // Create new user if not found
@@ -291,35 +306,50 @@ public class UserService implements UserDetailsService {
         if ("google".equals(provider)) {
             return oauth2User.getAttribute("picture");
         } else if ("facebook".equals(provider)) {
-            // Facebook can return picture in different formats
+            log.debug("Extracting Facebook profile picture. Available attributes: {}", oauth2User.getAttributes().keySet());
             try {
-                // Try to get it from picture object format
-                @SuppressWarnings("unchecked")
-                Map<String, Object> picture = oauth2User.getAttribute("picture");
-                if (picture != null) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> data = (Map<String, Object>) picture.get("data");
-                    if (data != null) {
-                        return (String) data.get("url");
+                // First try to get picture as direct attribute which might be a URL string
+                Object pictureAttr = oauth2User.getAttribute("picture");
+
+                if (pictureAttr != null) {
+                    // If it's a simple string, use it directly
+                    if (pictureAttr instanceof String) {
+                        return (String) pictureAttr;
+                    }
+                    // If it's a Map (Facebook's nested structure), extract the URL from it
+                    else if (pictureAttr instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> pictureMap = (Map<String, Object>) pictureAttr;
+                        log.debug("Facebook picture object found: {}", pictureMap);
+
+                        // Navigate through the nested structure
+                        if (pictureMap.containsKey("data")) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> data = (Map<String, Object>) pictureMap.get("data");
+                            if (data != null && data.containsKey("url")) {
+                                return (String) data.get("url");
+                            }
+                        }
                     }
                 }
 
-                // Try direct URL format
-                String directPictureUrl = oauth2User.getAttribute("picture");
-                if (directPictureUrl != null && directPictureUrl.startsWith("http")) {
-                    return directPictureUrl;
-                }
-
-                // Try looking for profile image in other formats
+                // Try looking for profile image in other formats or locations
                 @SuppressWarnings("unchecked")
                 Map<String, Object> profileMap = oauth2User.getAttribute("profile");
                 if (profileMap != null && profileMap.containsKey("picture")) {
-                    return (String) profileMap.get("picture");
+                    Object profilePicture = profileMap.get("picture");
+                    if (profilePicture instanceof String) {
+                        return (String) profilePicture;
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Error extracting Facebook profile picture: {}", e.getMessage());
+                log.debug("Facebook attributes dump for debugging: {}", oauth2User.getAttributes());
             }
         }
+
+        // Default fallback - no picture found
+        log.info("No profile picture found for {} provider", provider);
         return null;
     }
 

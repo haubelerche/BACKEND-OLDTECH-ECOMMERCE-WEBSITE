@@ -57,7 +57,7 @@ public class User {
     @Column(name = "dob")
     private Date dob;
 
-    @Column(name = "avatar_url")
+    @Column(name = "avatar_url", columnDefinition = "LONGTEXT")
     private String avatarUrl;
 
     @Enumerated(EnumType.STRING)
@@ -78,10 +78,10 @@ public class User {
     @Column(name = "auth_provider_id")
     private String authProviderId;
 
-    @Column(name = "auth_provider_token")
+    @Column(name = "auth_provider_token", columnDefinition = "LONGTEXT")
     private String authProviderToken;
 
-    @Column(name = "auth_provider_refresh_token")
+    @Column(name = "auth_provider_refresh_token", columnDefinition = "LONGTEXT")
     private String authProviderRefreshToken;
 
     @Column(name = "auth_provider_token_expires")
@@ -108,3 +108,4 @@ public class User {
 
 
 }
+

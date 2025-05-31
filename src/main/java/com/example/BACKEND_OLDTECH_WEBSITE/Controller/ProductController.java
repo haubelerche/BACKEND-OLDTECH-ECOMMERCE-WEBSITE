@@ -64,7 +64,7 @@ public ResponseEntity<?> rejectProduct(@PathVariable Integer productId) {
 
 
 
-/*--DÀNH CHO NGƯỜI DÙNG--*/
+/*--DÀNH CHO NGƯỜI DÙNG NÓI CHUNG--*/
 
 // TÌM KIẾM SẢN PHẨM BẰNG TỪ KHÓA
     @GetMapping("/searchProducts")

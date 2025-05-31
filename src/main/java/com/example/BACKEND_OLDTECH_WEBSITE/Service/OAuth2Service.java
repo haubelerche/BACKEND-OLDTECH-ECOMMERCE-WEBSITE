@@ -48,18 +48,36 @@ public class OAuth2Service {
     @Transactional
     public TokenResponse processOAuth2Login(OAuth2AuthenticationToken authentication) {
         OAuth2User oauth2User = authentication.getPrincipal();
-        String providerName = authentication.getAuthorizedClientRegistrationId().toLowerCase(); // Convert to lowercase
+        String providerName = authentication.getAuthorizedClientRegistrationId().toLowerCase();
 
         log.info("OAuth2 login attempt with provider: {}", providerName);
+        log.info("OAuth2 attributes available: {}", oauth2User.getAttributes().keySet());
 
-        // Enhanced logging for Facebook authentication
-        if ("facebook".equals(providerName)) {
-            log.info("Facebook authentication details - Name attribute present: {}, Email attribute present: {}",
-                oauth2User.getAttribute("name") != null,
-                oauth2User.getAttribute("email") != null);
+        // Extract user attributes using provider-specific methods
+        String email = extractEmail(oauth2User, providerName);
+        String name = extractName(oauth2User, providerName);
+        String firstName = extractFirstName(oauth2User, providerName);
+        String lastName = extractLastName(oauth2User, providerName);
+        String pictureUrl = extractPictureUrl(oauth2User, providerName);
+        String providerId = extractProviderId(oauth2User, providerName);
 
-            // Log all available attributes for debugging
-            log.info("Facebook OAuth2 available attributes: {}", oauth2User.getAttributes().keySet());
+        log.info("Extracted OAuth2 attributes - Provider: {}, Email: {}, Name: {}, Picture: {} available",
+            providerName, email, name, pictureUrl != null);
+
+        // Add extracted attributes to the user's attributes
+        Map<String, Object> enhancedAttributes = new HashMap<>(oauth2User.getAttributes());
+
+        // Ensure we have critical attributes
+        if (email == null) {
+            email = generatePlaceholderEmail(providerName, providerId);
+            enhancedAttributes.put("email", email);
+            log.info("Generated placeholder email: {}", email);
+        }
+
+        if (name == null) {
+            name = generateName(firstName, lastName, providerId);
+            enhancedAttributes.put("name", name);
+            log.info("Generated name from components: {}", name);
         }
 
         // Get token information from the authorized client
@@ -84,30 +102,40 @@ public class OAuth2Service {
         }
         
         // Merge token information with user attributes
-        Map<String, Object> userAttributes = new HashMap<>(oauth2User.getAttributes());
-        userAttributes.putAll(tokenAttributes);
-        
+        enhancedAttributes.putAll(tokenAttributes);
+
         // Convert to OAuth2User with token information
+        String nameAttributeKey = "name";
+
+        // Use a fallback if name is missing
+        if (!enhancedAttributes.containsKey(nameAttributeKey)) {
+            nameAttributeKey = getNameAttributeKeyForProvider(providerName);
+            log.info("Using alternate name attribute key for {}: {}", providerName, nameAttributeKey);
+        }
+
         OAuth2User enhancedUser = new org.springframework.security.oauth2.core.user.DefaultOAuth2User(
             oauth2User.getAuthorities(),
-            userAttributes,
-            "name"
+            enhancedAttributes,
+            nameAttributeKey
         );
         
         // Process the OAuth2 user, which will either find an existing user or create a new one
         User user = userService.processOAuth2User(enhancedUser, providerName);
-        
+        log.info("OAuth2 user processed: {}, ID: {}", user.getEmail(), user.getUserId());
+
         // Check if account is suspended
         checkAccountStatus(user);
 
         // Update last login time
         user.setLastLogin(new java.sql.Timestamp(System.currentTimeMillis()));
         userService.updateUserForOAuth2(user);
+        log.info("User last login updated");
 
         // Check if this is a first-time login or a returning user with incomplete profile
         boolean isNewUser = user.getCreatedAt().equals(user.getUpdatedAt());
         boolean isProfileIncomplete = isProfileIncomplete(user);
-        boolean requiresProfileCompletion = isProfileIncomplete || user.getPhoneNumber().startsWith("placeholder_");
+        boolean requiresProfileCompletion = isProfileIncomplete ||
+            (user.getPhoneNumber() != null && user.getPhoneNumber().startsWith("placeholder_"));
 
         log.info("OAuth2 login: User {} - isNewUser: {}, isProfileIncomplete: {}, provider: {}",
                user.getEmail(), isNewUser, isProfileIncomplete, providerName);
@@ -129,6 +157,8 @@ public class OAuth2Service {
 
         String jwt = jwtService.generateToken(additionalClaims, user);
 
+        log.info("JWT token generated for user: {}", user.getEmail());
+
         // Return token response with user info and registration status
         return TokenResponse.builder()
                 .token(jwt)
@@ -137,6 +167,174 @@ public class OAuth2Service {
                 .tokenType("Bearer")
                 .requiresProfileCompletion(requiresProfileCompletion)
                 .build();
+    }
+
+    /**
+     * Extract email from OAuth2User attributes based on provider
+     */
+    private String extractEmail(OAuth2User oauth2User, String provider) {
+        switch (provider) {
+            case "google":
+                return oauth2User.getAttribute("email");
+            case "facebook":
+                String email = oauth2User.getAttribute("email");
+                if (email == null || email.isEmpty()) {
+                    // Log the missing email for debugging
+                    log.warn("Facebook did not return email. Available attributes: {}",
+                        oauth2User.getAttributes().keySet());
+
+                    // Try alternate ways of accessing email
+                    Map<String, Object> jsonMap = oauth2User.getAttribute("_json");
+                    if (jsonMap != null && jsonMap.containsKey("email")) {
+                        email = (String) jsonMap.get("email");
+                        log.info("Retrieved email from _json property: {}", email);
+                    }
+
+                    // If still no email, create a placeholder with the Facebook ID
+                    if (email == null || email.isEmpty()) {
+                        String id = oauth2User.getAttribute("id");
+                        email = id != null ? "facebook_" + id + "@placeholder.com" : null;
+                        log.info("Using placeholder email: {}", email);
+                    }
+                }
+                return email;
+            default:
+                return oauth2User.getAttribute("email");
+        }
+    }
+
+    /**
+     * Extract full name from OAuth2User attributes based on provider
+     */
+    private String extractName(OAuth2User oauth2User, String provider) {
+        switch (provider) {
+            case "google":
+                return oauth2User.getAttribute("name");
+            case "facebook":
+                return oauth2User.getAttribute("name");
+            default:
+                // Try to construct from first and last name
+                String firstName = oauth2User.getAttribute("first_name");
+                String lastName = oauth2User.getAttribute("last_name");
+                if (firstName != null) {
+                    if (lastName != null) {
+                        return firstName + " " + lastName;
+                    }
+                    return firstName;
+                }
+                return oauth2User.getAttribute("name");
+        }
+    }
+
+    /**
+     * Extract first name from OAuth2User attributes based on provider
+     */
+    private String extractFirstName(OAuth2User oauth2User, String provider) {
+        switch (provider) {
+            case "google":
+                return oauth2User.getAttribute("given_name");
+            case "facebook":
+                return oauth2User.getAttribute("first_name");
+            default:
+                String name = oauth2User.getAttribute("name");
+                return name != null ? name.split(" ")[0] : null;
+        }
+    }
+
+    /**
+     * Extract last name from OAuth2User attributes based on provider
+     */
+    private String extractLastName(OAuth2User oauth2User, String provider) {
+        switch (provider) {
+            case "google":
+                return oauth2User.getAttribute("family_name");
+            case "facebook":
+                return oauth2User.getAttribute("last_name");
+            default:
+                String name = oauth2User.getAttribute("name");
+                if (name != null && name.contains(" ")) {
+                    String[] parts = name.split(" ");
+                    return parts[parts.length - 1];
+                }
+                return null;
+        }
+    }
+
+    /**
+     * Extract profile picture URL from OAuth2User attributes based on provider
+     */
+    private String extractPictureUrl(OAuth2User oauth2User, String provider) {
+        switch (provider) {
+            case "google":
+                return oauth2User.getAttribute("picture");
+            case "facebook":
+                Map<String, Object> picture = oauth2User.getAttribute("picture");
+                if (picture != null && picture instanceof Map) {
+                    Map<String, Object> data = (Map<String, Object>) picture.get("data");
+                    if (data != null) {
+                        return (String) data.get("url");
+                    }
+                }
+                return null;
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Extract provider-specific user ID from OAuth2User attributes
+     */
+    private String extractProviderId(OAuth2User oauth2User, String provider) {
+        switch (provider) {
+            case "google":
+                return oauth2User.getAttribute("sub");
+            case "facebook":
+                return oauth2User.getAttribute("id");
+            default:
+                return oauth2User.getAttribute("id");
+        }
+    }
+
+    /**
+     * Generate a placeholder email when provider doesn't supply one
+     */
+    private String generatePlaceholderEmail(String provider, String providerId) {
+        if (providerId == null) {
+            providerId = "unknown_" + System.currentTimeMillis();
+        }
+        return provider + "_" + providerId + "@placeholder.com";
+    }
+
+    /**
+     * Generate a name from first/last name components or use providerId
+     */
+    private String generateName(String firstName, String lastName, String providerId) {
+        if (firstName != null) {
+            if (lastName != null) {
+                return firstName + " " + lastName;
+            }
+            return firstName;
+        } else if (lastName != null) {
+            return lastName;
+        } else if (providerId != null) {
+            return "User_" + providerId;
+        } else {
+            return "Unknown User";
+        }
+    }
+
+    /**
+     * Get the appropriate attribute key for extracting the user's name based on provider
+     */
+    private String getNameAttributeKeyForProvider(String provider) {
+        switch (provider) {
+            case "facebook":
+                return "id"; // Facebook always has an ID
+            case "google":
+                return "sub"; // Google uses 'sub' as unique identifier
+            default:
+                return "id"; // Default fallback
+        }
     }
 
     private void checkAccountStatus(User user) {

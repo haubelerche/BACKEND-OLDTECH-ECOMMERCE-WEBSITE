@@ -36,7 +36,7 @@ public class FileUploadController {
     @Value("${file.upload-dir:uploads}")
     private String uploadDir;
     
-    @Value("${app.base-url:http://localhost:8080/oldtech}")
+    @Value("${app.base-url:https://funny-leading-puma.ngrok-free.app/oldtech}")
     private String baseUrl;
 
     @PostMapping("/verification-image")
@@ -162,4 +162,5 @@ public class FileUploadController {
         int dotIndex = filename.lastIndexOf('.');
         return (dotIndex == -1) ? "" : filename.substring(dotIndex);
     }
-} 
+}
+

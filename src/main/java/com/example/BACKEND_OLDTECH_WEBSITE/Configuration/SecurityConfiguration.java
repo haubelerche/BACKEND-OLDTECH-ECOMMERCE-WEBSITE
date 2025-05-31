@@ -12,8 +12,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
-import org.springframework.security.config.Customizer;
+
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.core.Ordered;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import java.util.Arrays;
 import java.util.List;
@@ -31,6 +33,7 @@ public class SecurityConfiguration {
 
     private final JWTAuthenticationFilter jwtAuthFilter;
     private final OAuth2AuthenticationSuccessHandler oauth2AuthenticationSuccessHandler;
+    private final FacebookOAuth2UserService facebookOAuth2UserService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -42,10 +45,13 @@ public class SecurityConfiguration {
                 .requestMatchers(
                     "/auth/**",
                     "/oauth2/**",
+                    "/login/oauth2/code/*",  // Added explicit permission for OAuth2 callback
                     "/public/**",
                     "/oldtech/auth/**",
                     "/oldtech/oauth2/**",
+                    "/oldtech/login/oauth2/code/*",  // Added with context path
                     "/oldtech/public/**",
+                    "/oldtech/facebook/debug/**",    // Added Facebook debug endpoints
                     "/oldtech/manager/superadmins"
                 ).permitAll()
 
@@ -84,17 +90,20 @@ public class SecurityConfiguration {
 
                 .anyRequest().authenticated()
             )
+            // Modified: Only use stateless sessions for non-OAuth2 requests
             .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)  // Changed from STATELESS to ALWAYS for OAuth2
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .oauth2Login(oauth2 -> oauth2
-                .successHandler(oauth2AuthenticationSuccessHandler)
-                .failureUrl("/oauth2/failure?error=Authentication failed")
-                .authorizationEndpoint(endpoint -> endpoint
+                .authorizationEndpoint(auth -> auth
                     .baseUri("/oauth2/authorization"))
-                .redirectionEndpoint(endpoint -> endpoint
+                .redirectionEndpoint(redirect -> redirect
                     .baseUri("/login/oauth2/code/*"))
+                .userInfoEndpoint(userInfo -> userInfo
+                    .userService(facebookOAuth2UserService))
+                .successHandler(oauth2AuthenticationSuccessHandler)
+                .failureUrl("/oauth2/failure?error=Authentication+failed")
             );
 
         return http.build();
@@ -109,7 +118,8 @@ public class SecurityConfiguration {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000"
+            "http://localhost:3000",
+            "https://funny-leading-puma.ngrok-free.app"  // Updated ngrok URL
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
@@ -119,5 +129,13 @@ public class SecurityConfiguration {
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
-}
 
+    // Add this method to your SecurityConfiguration class to dynamically handle ngrok URLs
+    @Bean
+    public FilterRegistrationBean<ForwardedHeaderFilter> forwardedHeaderFilter() {
+        FilterRegistrationBean<ForwardedHeaderFilter> filterRegistrationBean = new FilterRegistrationBean<>();
+        filterRegistrationBean.setFilter(new ForwardedHeaderFilter());
+        filterRegistrationBean.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return filterRegistrationBean;
+    }
+}
