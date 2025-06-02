@@ -1,4 +1,4 @@
-version:   3.22.1
+version: 3
 tunnels:
   oldtech:
     addr: 8080  # This must match your Spring Boot port
