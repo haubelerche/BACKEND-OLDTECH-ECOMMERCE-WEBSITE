@@ -38,6 +38,7 @@ import java.util.ArrayList;
 @Service
 @Slf4j
 @RequiredArgsConstructor
+@SuppressWarnings("unchecked") // Added to suppress unchecked operation warnings
 public class OAuth2Service {
     
     private final UserService userService;

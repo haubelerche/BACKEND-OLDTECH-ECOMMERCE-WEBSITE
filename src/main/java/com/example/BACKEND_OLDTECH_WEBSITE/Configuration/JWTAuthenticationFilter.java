@@ -37,7 +37,10 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
         final String userEmail;
 
         String path = request.getRequestURI();
-        if (path.startsWith("/oldtech/auth/") || path.startsWith("/auth/")) {
+        // Only bypass authentication for public auth endpoints
+        // Allow /auth/login, /auth/register etc., but require auth for /auth/2fa/ endpoints
+        if ((path.startsWith("/oldtech/auth/") || path.startsWith("/auth/"))
+                && !path.contains("/2fa/")) {
             filterChain.doFilter(request, response);
             return;
         }

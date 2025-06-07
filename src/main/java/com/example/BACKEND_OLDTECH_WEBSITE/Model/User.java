@@ -20,7 +20,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "user")
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -100,12 +101,22 @@ public class User {
     @Column(name = "is_verified", nullable = false)
     private Boolean isVerified = false;
 
+    @Column(name = "two_factor_secret")
+    private String twoFactorSecret;
+
+    @Column(name = "two_factor_enabled", nullable = false)
+    @Builder.Default
+    private Boolean twoFactorEnabled = false;
+
     @Column(name = "suspension_end_time")
     private LocalDateTime suspensionEndTime;
+
     @Column(name = "suspension_reason")
     private String suspensionReason;
 
-
+    // Helper method for 2FA status checking
+    public boolean isTwoFactorEnabled() {
+        return twoFactorEnabled != null && twoFactorEnabled;
+    }
 
 }
-

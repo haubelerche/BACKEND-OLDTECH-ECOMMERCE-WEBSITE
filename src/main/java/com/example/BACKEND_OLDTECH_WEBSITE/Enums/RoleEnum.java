@@ -1,7 +1,8 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Enums;
 
 public enum RoleEnum {
-        Customer, Seller, Admin, SuperAdmin
-    }
-
-    
+    Admin,
+    Customer,
+    Seller,
+    SuperAdmin
+}
