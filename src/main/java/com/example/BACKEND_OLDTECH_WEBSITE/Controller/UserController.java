@@ -137,7 +137,7 @@ public class UserController {
 
 
 //CẬP NHẬT HỒ SƠ NGƯỜI DÙNG
-    @PutMapping("/profile/update/{userId}")
+    @RequestMapping(value = "/profile/update/{userId}", method = {RequestMethod.PUT, RequestMethod.POST})
     public ResponseEntity<?> updateUserProfile(@PathVariable Integer userId, @RequestBody(required = false) Map<String, Object> profileData) {
         try {
             // Check if the request body is empty

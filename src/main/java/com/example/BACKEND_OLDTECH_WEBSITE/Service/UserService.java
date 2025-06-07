@@ -844,6 +844,17 @@ public class UserService implements UserDetailsService {
             user.setPhoneNumber(newPhone);
         }
 
+        // Handle email updates - always allow updates but validate uniqueness
+        if (profileData.containsKey("email")) {
+            String newEmail = (String) profileData.get("email");
+            // Check if new email exists for another user
+            if (!newEmail.equals(user.getEmail()) && existsByEmail(newEmail)) {
+                throw new IllegalArgumentException("Email này đã được sử dụng bởi tài khoản khác.");
+            }
+            user.setEmail(newEmail);
+            log.info("Updated email for user ID: {} to: {}", userId, newEmail);
+        }
+
         // Handle avatar URL updates - always allow
         if (profileData.containsKey("avatarUrl")) {
             user.setAvatarUrl((String) profileData.get("avatarUrl"));
