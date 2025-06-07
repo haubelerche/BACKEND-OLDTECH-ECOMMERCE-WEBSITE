@@ -219,7 +219,7 @@ public class OAuth2Controller {
                 response.addCookie(userIdCookie);
 
                 // Add welcome message as a Base64 encoded cookie
-                String welcomeMessage = createWelcomeMessage(provider, isNewUser, requiresProfileCompletion);
+                String welcomeMessage = oauth2Service.createWelcomeMessage(provider, isNewUser, requiresProfileCompletion);
                 Cookie messageCookie = new Cookie("welcome_message",
                     Base64.getEncoder().encodeToString(welcomeMessage.getBytes(StandardCharsets.UTF_8)));
                 messageCookie.setPath("/");
@@ -350,7 +350,7 @@ public class OAuth2Controller {
                 response.addCookie(userIdCookie);
 
                 // Add welcome message as a Base64 encoded cookie
-                String welcomeMessage = createWelcomeMessage(provider, isNewUser, requiresProfileCompletion);
+                String welcomeMessage = oauth2Service.createWelcomeMessage(provider, isNewUser, requiresProfileCompletion);
                 Cookie messageCookie = new Cookie("welcome_message",
                     Base64.getEncoder().encodeToString(welcomeMessage.getBytes(StandardCharsets.UTF_8)));
                 messageCookie.setPath("/");
@@ -397,30 +397,5 @@ public class OAuth2Controller {
 
         log.info("Redirecting to: {}", redirectUrl);
         response.sendRedirect(redirectUrl);
-    }
-
-    /**
-     * Creates a personalized welcome message based on authentication provider and user status
-     */
-    private String createWelcomeMessage(String provider, boolean isNewUser, boolean requiresProfileCompletion) {
-        String capitalizedProvider = provider.substring(0, 1).toUpperCase() + provider.substring(1).toLowerCase();
-
-        if (isNewUser) {
-            if (requiresProfileCompletion) {
-                return "Chào mừng bạn đã đăng ký thành công bằng tài khoản " + capitalizedProvider + "! " +
-                       "Vui lòng cập nhật thông tin cá nhân của bạn để hoàn tất đăng ký và được admin xác thực " +
-                       "để có thể sử dụng đầy đủ tính năng mua hàng hoặc trở thành người bán.";
-            } else {
-                return "Chào mừng bạn đã đăng ký thành công bằng tài khoản " + capitalizedProvider + "! " +
-                       "Tài khoản của bạn đã sẵn sàng để sử dụng.";
-            }
-        } else {
-            if (requiresProfileCompletion) {
-                return "Đăng nhập thành công bằng " + capitalizedProvider + "! " +
-                       "Vui lòng cập nhật thông tin cá nhân của bạn để được admin xác thực và sử dụng đầy đủ tính năng.";
-            } else {
-                return "Đăng nhập thành công bằng " + capitalizedProvider + "!";
-            }
-        }
     }
 }

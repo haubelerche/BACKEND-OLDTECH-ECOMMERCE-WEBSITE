@@ -41,17 +41,16 @@ public class SecurityConfiguration {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints - accessible without authentication
                 .requestMatchers(
                     "/auth/**",
                     "/oauth2/**",
-                    "/login/oauth2/code/*",  // Added explicit permission for OAuth2 callback
+                    "/login/oauth2/code/*",
                     "/public/**",
                     "/oldtech/auth/**",
                     "/oldtech/oauth2/**",
-                    "/oldtech/login/oauth2/code/*",  // Added with context path
+                    "/oldtech/login/oauth2/code/*",
                     "/oldtech/public/**",
-                    "/oldtech/facebook/debug/**",    // Added Facebook debug endpoints
+                    "/oldtech/facebook/debug/**",
                     "/oldtech/manager/superadmins"
                 ).permitAll()
 
@@ -74,7 +73,7 @@ public class SecurityConfiguration {
                 ).hasAuthority("SuperAdmin")
 
 
-                // TODO: SEARCH FOR PRODUCT LÀ PUBLIC; SEARCH FOR SELLER LÀ CUSTOMER ACTIVITIES; SEARCH FOR HUMAN LÀ ADMIN ACTIVITIES
+                // TODO: SEARCH FOR PRODUCT LÀ PUBLIC; SEARCH FOR SELLER LÀ CUSTOMER ACTIVITIES; SEARCH FOR ALLS LÀ ADMIN ACTIVITIES
                 .requestMatchers(
                     "/oldtech/customer/all",
                     "/oldtech/customer/{userId}",
@@ -90,7 +89,7 @@ public class SecurityConfiguration {
 
                 .anyRequest().authenticated()
             )
-            // Modified: Only use stateless sessions for non-OAuth2 requests
+
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)  // Changed from STATELESS to ALWAYS for OAuth2
             )
@@ -119,7 +118,7 @@ public class SecurityConfiguration {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(Arrays.asList(
             "http://localhost:3000",
-            "https://funny-leading-puma.ngrok-free.app"  // Updated ngrok URL
+            "https://funny-leading-puma.ngrok-free.app"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
@@ -130,7 +129,7 @@ public class SecurityConfiguration {
         return source;
     }
 
-    // Add this method to your SecurityConfiguration class to dynamically handle ngrok URLs
+
     @Bean
     public FilterRegistrationBean<ForwardedHeaderFilter> forwardedHeaderFilter() {
         FilterRegistrationBean<ForwardedHeaderFilter> filterRegistrationBean = new FilterRegistrationBean<>();

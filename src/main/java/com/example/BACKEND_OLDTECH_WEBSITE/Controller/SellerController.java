@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,31 +47,40 @@ public class SellerController {
 /*---DÀNH CHO ADMIN---*/
 
 
-//LẤY CỤ THỂ STATUS CỦA NGƯỜI DÙNG (bộ lọc)
-
-    @PostMapping("/users/verify-status{userId}/")
-    public ResponseEntity<?> setUserVerifiedStatus(@PathVariable Integer userId, @RequestParam boolean isVerified) {
-        try {
-            sellerService.setUserVerifiedStatus(userId, isVerified);
-            return ResponseEntity.ok("Trạng thái xác thực của người dùng " + userId + " đã được cập nhật thành: " + (isVerified ? "Đã xác thực" : "Chưa xác thực"));
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật trạng thái xác thực: " + e.getMessage());
-        }
-    }
-
-
 //XÁC THỰC NGƯỜI BÁN
     @PostMapping("/sellers/verify/{sellerId}")
     public ResponseEntity<?> verifySeller(@PathVariable Integer sellerId) {
         try {
             sellerService.verifySeller(sellerId);
-            return ResponseEntity.ok("Người bán " + sellerId + " đã được xác thực thành công.");
+
+            // Return a proper JSON response
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "Người bán " + sellerId + " đã được xác thực thành công.");
+            response.put("sellerId", sellerId);
+
+            return ResponseEntity
+                    .ok()
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(response);
         } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", e.getMessage());
+
+            return ResponseEntity
+                    .status(HttpStatus.NOT_FOUND)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(errorResponse);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi xác thực người bán: " + e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Lỗi khi xác thực người bán: " + e.getMessage());
+
+            return ResponseEntity
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .body(errorResponse);
         }
     }
 

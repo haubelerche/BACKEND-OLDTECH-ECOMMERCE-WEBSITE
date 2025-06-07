@@ -1,5 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Repository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -21,4 +22,5 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     List<User> findByAccountStatus(AccountStatusEnum accountStatus);
     List<User> findByAccountStatusAndSuspensionEndTimeBefore(AccountStatusEnum status, LocalDateTime dateTime);
     List<User> findByAccountStatusAndSuspensionEndTimeIsNotNull(AccountStatusEnum status);
+    List<User> findByRole(RoleEnum role); // Added method to find users by role
 }

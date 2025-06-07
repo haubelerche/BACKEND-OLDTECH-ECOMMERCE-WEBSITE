@@ -572,4 +572,29 @@ public class OAuth2Service {
 
         return steps;
     }
+
+    /**
+     * Creates a personalized welcome message based on authentication provider and user status
+     */
+    public String createWelcomeMessage(String provider, boolean isNewUser, boolean requiresProfileCompletion) {
+        String capitalizedProvider = provider.substring(0, 1).toUpperCase() + provider.substring(1).toLowerCase();
+
+        if (isNewUser) {
+            if (requiresProfileCompletion) {
+                return "Chào mừng bạn đã đăng ký thành công bằng tài khoản " + capitalizedProvider + "! " +
+                       "Vui lòng cập nhật thông tin cá nhân của bạn để hoàn tất đăng ký và được admin xác thực " +
+                       "để có thể sử dụng đầy đủ tính năng mua hàng hoặc trở thành người bán.";
+            } else {
+                return "Chào mừng bạn đã đăng ký thành công bằng tài khoản " + capitalizedProvider + "! " +
+                       "Tài khoản của bạn đã sẵn sàng để sử dụng.";
+            }
+        } else {
+            if (requiresProfileCompletion) {
+                return "Đăng nhập thành công bằng " + capitalizedProvider + "! " +
+                       "Vui lòng cập nhật thông tin cá nhân của bạn để được admin xác thực và sử dụng đầy đủ tính năng.";
+            } else {
+                return "Đăng nhập thành công bằng " + capitalizedProvider + "!";
+            }
+        }
+    }
 }

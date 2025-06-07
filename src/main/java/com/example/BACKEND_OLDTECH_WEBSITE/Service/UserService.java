@@ -129,7 +129,8 @@ public class UserService implements UserDetailsService {
         return savedUser;
     }
     
-    private boolean isProfileIncomplete(User user) {
+    // Changed from private to public to allow access from controllers
+    public boolean isProfileIncomplete(User user) {
         // Check required fields for a complete profile
         return user.getPhoneNumber() == null || 
                user.getDob() == null ||
@@ -782,5 +783,121 @@ public class UserService implements UserDetailsService {
         userRepository.save(user);
         log.info("Password changed successfully for user ID: {}", user.getUserId());
     }
-}
 
+    /**
+     * Update user profile with provided data
+     * Automatically checks if phone/DOB are valid and complete
+     * Verified users cannot change their name, DOB, or verification images
+     */
+    @Transactional
+    public User updateUserProfile(Integer userId, Map<String, Object> profileData) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với ID: " + userId));
+
+        boolean isVerified = user.getIsVerified() != null && user.getIsVerified();
+
+        // Update basic user information if provided and user is not verified
+        if (!isVerified) {
+            // Only allow name changes if the user is not verified
+            if (profileData.containsKey("firstName")) {
+                user.setFirstName((String) profileData.get("firstName"));
+            }
+
+            if (profileData.containsKey("lastName")) {
+                user.setLastName((String) profileData.get("lastName"));
+            }
+
+            // Only allow DOB changes if the user is not verified
+            if (profileData.containsKey("dob")) {
+                Object dobValue = profileData.get("dob");
+                java.sql.Date dobDate = null;
+
+                if (dobValue instanceof Long) {
+                    dobDate = new java.sql.Date((Long) dobValue);
+                } else if (dobValue instanceof String) {
+                    try {
+                        // Try parsing as ISO date string
+                        dobDate = java.sql.Date.valueOf((String) dobValue);
+                    } catch (Exception e) {
+                        log.error("Failed to parse DOB string: {}", dobValue);
+                        throw new IllegalArgumentException("Định dạng ngày sinh không hợp lệ. Vui lòng sử dụng định dạng YYYY-MM-DD.");
+                    }
+                }
+
+                if (dobDate != null) {
+                    user.setDob(dobDate);
+                }
+            }
+        } else if (profileData.containsKey("firstName") || profileData.containsKey("lastName") || profileData.containsKey("dob")) {
+            // If the user is verified and attempts to change these restricted fields, throw an exception
+            log.warn("User ID {} is verified and attempting to change restricted profile fields", userId);
+            throw new IllegalStateException("Bạn không thể thay đổi họ tên hoặc ngày sinh sau khi tài khoản đã được xác thực.");
+        }
+
+        // Handle phone number updates - always allow updates but validate uniqueness
+        if (profileData.containsKey("phoneNumber")) {
+            String newPhone = (String) profileData.get("phoneNumber");
+            // Check if new phone exists for another user
+            if (!newPhone.equals(user.getPhoneNumber()) && existsByPhoneNumber(newPhone)) {
+                throw new IllegalArgumentException("Số điện thoại này đã được sử dụng bởi tài khoản khác.");
+            }
+            user.setPhoneNumber(newPhone);
+        }
+
+        // Handle avatar URL updates - always allow
+        if (profileData.containsKey("avatarUrl")) {
+            user.setAvatarUrl((String) profileData.get("avatarUrl"));
+        }
+
+        // Handle refund MoMo account updates - always allow
+        if (profileData.containsKey("refundMomoAccount")) {
+            user.setRefundMomoAccount((String) profileData.get("refundMomoAccount"));
+        }
+
+        // Update timestamp
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+
+        // Save and return the updated user
+        return userRepository.save(user);
+    }
+
+    /**
+     * Send notification to user when their profile is submitted for verification
+     */
+    @Transactional
+    public void sendProfileSubmittedForVerificationNotification(User user) {
+        Notification notification = new Notification();
+        notification.setUser(user);
+        notification.setMessage("Hồ sơ của bạn đã được gửi tới admin để xác thực. Bạn sẽ nhận được thông báo khi quá trình xác thực hoàn tất.");
+        notification.setCreatedAt(Timestamp.from(Instant.now()));
+        notification.setRead(false);
+        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        notificationRepository.save(notification);
+
+        log.info("Sent profile submitted for verification notification to user ID: {}", user.getUserId());
+
+        // Also send notification to admin about the new profile verification request
+        sendAdminNotificationForVerificationRequest(user);
+    }
+
+    /**
+     * Send notification to admin for new verification requests
+     */
+    private void sendAdminNotificationForVerificationRequest(User requestingUser) {
+        // Get all admin users
+        List<User> adminUsers = userRepository.findByRole(RoleEnum.Admin);
+
+        for (User admin : adminUsers) {
+            Notification notification = new Notification();
+            notification.setUser(admin);
+            notification.setMessage("Yêu cầu xác thực mới từ người dùng: " + requestingUser.getFirstName() + " " +
+                                   requestingUser.getLastName() + " (ID: " + requestingUser.getUserId() + ")");
+            notification.setCreatedAt(Timestamp.from(Instant.now()));
+            notification.setRead(false);
+            notification.setNotificationType(NotificationTypeEnum.System);
+            notificationRepository.save(notification);
+
+            log.info("Sent verification request notification to admin ID: {}", admin.getUserId());
+        }
+    }
+}

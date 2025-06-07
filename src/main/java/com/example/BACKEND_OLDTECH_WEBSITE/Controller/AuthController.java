@@ -9,8 +9,11 @@ import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.ResetPasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Configuration.JWTProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.AuthenticationService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -19,6 +22,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.servlet.view.RedirectView;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import java.util.HashMap;
@@ -42,6 +46,9 @@ public class AuthController {
 
     @Autowired
     private AuthenticationService authenticationService;
+
+    @Value("${frontend.url}")
+    private String frontendUrl;
 
 
 
@@ -77,22 +84,43 @@ public class AuthController {
 //ĐĂNG KÝ
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
-    System.out.println("Register endpoint called!");
+        System.out.println("Register endpoint called!");
         try {
-        if (userService.existsByEmail(registerRequest.getEmail())) {
-            return ResponseEntity.badRequest().body("Email đã được sử dụng!");
-        }
+            if (userService.existsByEmail(registerRequest.getEmail())) {
+                return ResponseEntity.badRequest().body("Email đã được sử dụng!");
+            }
 
-        if (userService.existsByPhoneNumber(registerRequest.getPhoneNumber())) {
-            return ResponseEntity.badRequest().body("Số điện thoại đã được đăng ký!");
-        }
+            if (userService.existsByPhoneNumber(registerRequest.getPhoneNumber())) {
+                return ResponseEntity.badRequest().body("Số điện thoại đã được đăng ký!");
+            }
 
-        userService.createUser(registerRequest);
-        return ResponseEntity.ok("Đăng ký thành công!");
-    } catch (Exception e) {
-        return ResponseEntity.badRequest().body("Đăng ký thất bại: " + e.getMessage());
+            User user = userService.createUser(registerRequest);
+
+            // Generate token for authentication after registration
+            Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(
+                    registerRequest.getEmail(),
+                    registerRequest.getPassword()
+                )
+            );
+
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            String jwt = tokenProvider.generateToken(authentication);
+            String refreshToken = tokenProvider.generateRefreshToken(registerRequest.getEmail());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("accessToken", jwt);
+            response.put("refreshToken", refreshToken);
+            response.put("tokenType", "Bearer");
+            response.put("userId", user.getUserId());
+            response.put("requiresProfileCompletion", true);
+            response.put("message", "Đăng ký thành công! Vui lòng cập nhật thông tin cá nhân để được xác thực.");
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Đăng ký thất bại: " + e.getMessage());
+        }
     }
-}
 
 
 

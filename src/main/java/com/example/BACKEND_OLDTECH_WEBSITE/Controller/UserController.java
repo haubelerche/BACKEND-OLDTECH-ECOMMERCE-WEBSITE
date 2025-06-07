@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.util.List;
 import java.util.HashMap;
@@ -88,7 +89,7 @@ public class UserController {
 
 
 // LAY HO SO CUA MOT NGUOI ((SUPER)ADMIN)
-    @GetMapping("/{userId}")
+    @GetMapping("/single/{userId}")
     public ResponseEntity<?> getUserById(@PathVariable Integer userId) {
         try {
             User user = userService.getUserById(userId);
@@ -104,7 +105,7 @@ public class UserController {
 
 
 //DOI MAT KHAU TRONG HO SO
-    @PostMapping("/profile/{userId}/password")
+    @PostMapping("/profile/password/{userId}")
     public ResponseEntity<?> changePassword(@PathVariable Integer userId, @RequestBody ChangePasswordRequest request) {
         try {
             userService.changePassword(userId, request);
@@ -120,8 +121,8 @@ public class UserController {
 
 
 
-//VO HIEU HOA TAI KHOAN (CUSTOMER AND (SUPER)ADMIN)
-    @PostMapping("/profile/{userId}/deactivate") //forever
+//VO HIEU HOA TAI KHOAN (USED BY CUSTOMER AND (SUPER)ADMIN)
+    @PostMapping("/profile/deactivate/{userId}") //forever
     public ResponseEntity<?> deactivateAccount(@PathVariable Integer userId) {
         try {
             userService.deactivateAccount(userId);
@@ -135,26 +136,97 @@ public class UserController {
 
 
 
-//YEU CAU XAC THUC HO SO, GUI TOI ADMIN SAU KHI HOAN TAT THONG TIN CA NHAN
-    @PostMapping("/profile/{userId}/verification")
-    public ResponseEntity<?> requestVerification(@PathVariable Integer userId, @RequestBody VerificationRequest verificationRequest) {
+//CẬP NHẬT HỒ SƠ NGƯỜI DÙNG
+    @PutMapping("/profile/update/{userId}")
+    public ResponseEntity<?> updateUserProfile(@PathVariable Integer userId, @RequestBody(required = false) Map<String, Object> profileData) {
         try {
-            userService.submitVerificationDocuments(userId, verificationRequest);
-            return ResponseEntity.ok("Yêu cầu xác thực đã được gửi thành công. Vui lòng chờ quản trị viên xem xét.");
+            // Check if the request body is empty
+            if (profileData == null || profileData.isEmpty()) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("status", "error");
+                errorResponse.put("message", "Yêu cầu cập nhật thông tin không thể trống. Vui lòng cung cấp dữ liệu JSON để cập nhật.");
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+            }
+
+            // Log received data for debugging
+            System.out.println("Received profile update request for user ID: " + userId);
+            System.out.println("Profile data: " + profileData);
+
+            User user = userService.getUserById(userId);
+            boolean wasIncomplete = userService.isProfileIncomplete(user);
+
+            // Update profile with provided data
+            User updatedUser = userService.updateUserProfile(userId, profileData);
+            boolean isNowComplete = !userService.isProfileIncomplete(updatedUser);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("userId", userId);
+            response.put("isProfileComplete", isNowComplete);
+            response.put("isVerified", updatedUser.getIsVerified());
+
+            // If the profile was incomplete before but is now complete, automatically submit for verification
+            if (wasIncomplete && isNowComplete) {
+                response.put("verificationStatus", "submitted");
+                response.put("message", "Hồ sơ của bạn đã được cập nhật thành công và đã được gửi tới admin để xác thực.");
+
+                // Notify user that their profile has been submitted for verification
+                userService.sendProfileSubmittedForVerificationNotification(updatedUser);
+            } else if (isNowComplete) {
+                response.put("message", "Hồ sơ của bạn đã được cập nhật thành công.");
+            } else {
+                // Identify what's still missing
+                Map<String, Boolean> missingFields = new HashMap<>();
+                if (updatedUser.getDob() == null) {
+                    missingFields.put("dateOfBirth", true);
+                }
+
+                if (updatedUser.getPhoneNumber() == null ||
+                        updatedUser.getPhoneNumber().startsWith("placeholder_") ||
+                        updatedUser.getPhoneNumber().startsWith("+")) {
+                    missingFields.put("phoneNumber", true);
+                }
+
+                response.put("missingFields", missingFields);
+                response.put("message", "Hồ sơ đã được cập nhật nhưng vẫn chưa hoàn tất. Vui lòng bổ sung thông tin còn thiếu.");
+            }
+
+            return ResponseEntity.ok(response);
+        } catch (HttpMessageNotReadableException e) {
+            // Handle empty or malformed JSON specifically
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Dữ liệu JSON không hợp lệ hoặc bị thiếu. Vui lòng kiểm tra và gửi lại yêu cầu với dữ liệu JSON hợp lệ.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
         } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
         } catch (IllegalStateException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            // Handle cases where changing restricted fields is attempted
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        } catch (IllegalArgumentException e) {
+            // Handle validation errors
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi gửi yêu cầu xác thực: " + e.getMessage());
+            // Detailed logging of unexpected errors
+            e.printStackTrace();
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Lỗi khi cập nhật hồ sơ: " + e.getMessage());
+            errorResponse.put("exceptionType", e.getClass().getName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
 
-
-
-
 //GUI DON KHIEN NAI TOI ADMIN
-    @PostMapping("/profile/{userId}/complaints")
+    @PostMapping("/profile/complaints/{userId}")
     public ResponseEntity<?> fileComplaint(@PathVariable Integer userId, @RequestBody String complaint) {
         try {
             userService.fileComplaint(userId, complaint);
@@ -169,7 +241,7 @@ public class UserController {
 
 
 // LAY CAC LOAI THONG BAO
-    @GetMapping("/profile/{userId}/notifications")
+    @GetMapping("/profile/notifications/{userId}")
     public ResponseEntity<?> getNotifications(@PathVariable Integer userId) {
         try {
             List<Notification> notifications = userService.getNotifications(userId);
@@ -184,7 +256,7 @@ public class UserController {
 
 
 // MARK THONG BAO DA DOC
-    @PostMapping("/profile/{userId}/notifications/{notificationId}/read")
+    @PostMapping("/profile/notifications/{notificationId}/read/{userId}")
     public ResponseEntity<?> markNotificationRead(@PathVariable Integer userId, @PathVariable Long notificationId) {
         try {
             userService.markNotificationRead(userId, notificationId);
@@ -214,11 +286,5 @@ public class UserController {
 
 
 
-
-
-
-
-
-
-}
+    }
 

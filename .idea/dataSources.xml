@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="secondhand_sale@localhost" uuid="b9587fc1-bffd-4dec-8bc1-fbd2f2e5c3d8">
+    <data-source source="LOCAL" name="secondhand_sale@dietpi.tailf5d7c4.ts.net" uuid="b9587fc1-bffd-4dec-8bc1-fbd2f2e5c3d8">
       <driver-ref>mysql.8</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>com.mysql.cj.jdbc.Driver</jdbc-driver>
-      <jdbc-url>jdbc:mysql://localhost:3306/secondhand_sale</jdbc-url>
+      <jdbc-url>jdbc:mysql://dietpi.tailf5d7c4.ts.net:6033/secondhand_sale</jdbc-url>
       <jdbc-additional-properties>
         <property name="com.intellij.clouds.kubernetes.db.host.port" />
         <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
+        <property name="com.intellij.clouds.kubernetes.db.resource.type" value="Deployment" />
         <property name="com.intellij.clouds.kubernetes.db.container.port" />
       </jdbc-additional-properties>
       <working-dir>$ProjectFileDir$</working-dir>
