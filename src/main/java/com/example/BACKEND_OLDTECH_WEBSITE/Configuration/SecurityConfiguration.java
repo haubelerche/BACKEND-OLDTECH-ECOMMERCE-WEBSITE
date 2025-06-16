@@ -52,21 +52,31 @@ public class SecurityConfiguration {
                     "/oldtech/public/**",
                     "/oldtech/facebook/debug/**",
                     "/oldtech/manager/superadmins"
+
                 ).permitAll()
 
 
                 .requestMatchers(
                     "/admin/**",
                     "/oldtech/admin/**",
-                    "/oldtech/verification/admin/**"
+                    "/oldtech/verification/admin/**",
+                    "/verification/admin/**", // Added this line to protect the non-prefixed endpoint
+                    "/oldtech/product/**"
                 ).hasAnyAuthority("Admin", "SuperAdmin")
 
-                //SELLER-ONLY
-                .requestMatchers("/seller/**", "/oldtech/seller/**")
-                    .hasAnyAuthority("Seller", "Admin", "SuperAdmin")
 
-                //SUPERADMIN-ONLY
-                .requestMatchers("/oldtech/manager/admins",
+                .requestMatchers( "/oldtech/reviews/**","/oldtech/addresses/** " )
+                .hasAnyAuthority("Customer")
+
+
+
+                .requestMatchers( "/oldtech/seller/**")
+                    .hasAnyAuthority("Seller")
+
+
+
+                .requestMatchers(
+                        "/oldtech/manager/admins",
                         "/oldtech/manager/**",
                         "/manager/**",
                         "/oldtech/manager/admins/**"
@@ -77,21 +87,30 @@ public class SecurityConfiguration {
                 .requestMatchers(
                     "/oldtech/customer/all",
                     "/oldtech/customer/{userId}",
+                        "/oldtech/customer/profile/**",
+                    //search
                     "/oldtech/customer/search/name/{name}",
                     "/oldtech/customer/search/email/{email}",
                     "/oldtech/customer/search/phone/{phoneNumber}",
-                    "/oldtech/customer/profile/**",
                       "/oldtech/customer/search/email/",
                     "/oldtech/customer/search/phone/",
                     "/oldtech/customer/search/name/"
-                ).hasAnyAuthority("Customer", "Seller", "Admin", "SuperAdmin")
-
-
+                ).hasAnyAuthority("Customer", "Admin", "SuperAdmin")
                 .anyRequest().authenticated()
             )
 
+
+
+
+
+
+
+
+
+
+
             .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.ALWAYS)  // Changed from STATELESS to ALWAYS for OAuth2
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)  // Changed from ALWAYS to STATELESS for better REST API security
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .oauth2Login(oauth2 -> oauth2

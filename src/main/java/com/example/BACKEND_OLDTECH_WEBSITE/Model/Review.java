@@ -20,27 +20,31 @@ public class Review {
     @Column(name = "review_id", columnDefinition = "INT UNSIGNED", nullable = false)
     private Integer reviewId;
 
-
+    @Column(name = "order_id")
     private Integer orderId;
 
-
+    @Column(name = "reviewer_id")
     private Integer reviewerId;
 
-
+    @Column(name = "seller_id")
     private Integer sellerId;
 
-    private Integer productId; //vẫn để productId ở đây vì nhận xét người bán, đính kèm theo ng mua đã mua gì của nó mà đánh giá nó thế. ok
+    @Column(name = "product_id")
+    private Integer productId;
 
-    
+    @Column(name = "rating")
     private Integer rating;
 
+    @Column(name = "review")
+    private String review;
 
-    private String comment;
-
+    @Column(name = "review_time")
     private Timestamp reviewTime;
 
-
+    @Column(name = "seller_response")
     private String sellerResponse;
 
+    @Column(name = "response_time")
     private Timestamp responseTime;
 }
+

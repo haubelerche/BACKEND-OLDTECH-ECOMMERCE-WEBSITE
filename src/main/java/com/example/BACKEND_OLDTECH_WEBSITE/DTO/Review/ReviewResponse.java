@@ -10,9 +10,11 @@ public class ReviewResponse {
     private Integer orderId;
     private Integer reviewerId;
     private Integer sellerId;
+    private Integer productId;
     private Integer rating;
-    private String comment;
+    private String review;
     private Timestamp reviewTime;
     private String sellerResponse;
     private Timestamp responseTime;
 }
+

@@ -9,6 +9,6 @@ import java.util.List;
 @Repository
 public interface SellerRepository extends JpaRepository<Seller, Integer> {
     List<Seller> findByIsApproved(Boolean isApproved);
-    List<Seller> findByBusinessStatus(Byte businessStatus);
+    List<Seller> findByBusinessStatus(Boolean businessStatus);
 }
 

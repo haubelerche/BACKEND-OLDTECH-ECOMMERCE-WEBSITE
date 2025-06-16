@@ -1,6 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
-// Standard Java imports
+
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -8,22 +8,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-// Jakarta Persistence imports
 import jakarta.persistence.EntityNotFoundException;
 
-// Spring Framework imports
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-// Application-specific Enums
+
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 
-// Application-specific Models
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Category; // Assuming you meant to use this, was previously fully qualified
+
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Category; 
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
@@ -31,7 +30,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 
-// Application-specific Repositories
+
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.CategoryRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderDetailRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderRepository;
@@ -62,34 +61,30 @@ public class SellerService {
         this.categoryRepository = categoryRepository;
     }
 
+    // Retrieve a seller by ID
+    public Seller getSellerById(Integer sellerId) {
+        return sellerRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người bán với ID: " + sellerId));
+    }
+
     @Transactional
     public Product addProduct(Integer sellerId, String name, String description, BigDecimal price, String categoryName) {
-        // Find the seller (User)
-        User seller = userRepository.findById(sellerId)
-            .orElseThrow(() -> new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId));
-
-        // Check role (Seller or Admin can add)
-        if (seller.getRole() != RoleEnum.Seller && seller.getRole() != RoleEnum.Admin) {
-            throw new SecurityException("Người dùng với ID: " + sellerId + " không được cấp quyền để thêm sản phẩm.");
-        }
-
-        // Find category by name
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
+        
         Category category = categoryRepository.findByName(categoryName)
             .stream()
             .findFirst()
             .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy danh mục với tên: " + categoryName));
-
-        // Create new product with default values
-       // Create new product with default values
         Product product = Product.builder()
         .sellerId(sellerId)
         .name(name)
         .description(description)
         .price(price)
-        .categoryId(category.getId().intValue()) // Use the 'category' instance here
-        .status(ProductStatusEnum.Pending)  // Default status
-        .isApproved(false)  // Default to not approved
-        .isVisible(false) // Default visibility to false
+        .categoryId(category.getId().longValue()) // Changed from intValue() to longValue() to match the Long type
+        .status(ProductStatusEnum.Pending)
+        .isApproved(false)
+        .isVisible(false)
         .createdAt(new Timestamp(System.currentTimeMillis()))
         .updatedAt(new Timestamp(System.currentTimeMillis()))
         .build();
@@ -98,13 +93,8 @@ public class SellerService {
 
     @Transactional
     public Product updateProduct(Integer sellerId, Integer productId, Product productDetails) {
-        User seller = userRepository.findById(sellerId)
-            .orElseThrow(() -> new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId));
-        
-
-        if (seller.getRole() != RoleEnum.Seller && seller.getRole() != RoleEnum.Admin) {
-            throw new SecurityException("Người dùng với ID: " + sellerId + " không được cấp quyền để cập nhật sản phẩm.");
-        }
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
 
 
         Product existingProduct = productRepository.findById(productId)
@@ -131,8 +121,6 @@ public class SellerService {
         if (productDetails.getStatus() != null) {
             existingProduct.setStatus(productDetails.getStatus());
         }
-        // Potentially reset approval status if significant details change, or handle as per business logic
-        // existingProduct.setIsApproved(false); 
 
         existingProduct.setUpdatedAt(Timestamp.from(Instant.now()));
 
@@ -141,13 +129,8 @@ public class SellerService {
 
     @Transactional
     public void deleteProduct(Integer sellerId, Integer productId) {
-
-        User seller = userRepository.findById(sellerId)
-            .orElseThrow(() -> new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId));
-        
-        if (seller.getRole() != RoleEnum.Seller && seller.getRole() != RoleEnum.Admin) {
-            throw new SecurityException("Người dùng với ID: " + sellerId + " không được cấp quyền để xóa sản phẩm.");
-        }
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
 
 
         Product productToDelete = productRepository.findById(productId)
@@ -164,10 +147,9 @@ public class SellerService {
 
     @Transactional(readOnly = true)
     public List<Product> getProductsBySeller(Integer sellerId) {
-
-        if (!userRepository.existsById(sellerId)) {
-            throw new EntityNotFoundException("Không tìm thấy người bán với ID: " + sellerId + ", không thể truy xuất sản phẩm.");
-        }
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
+        
         return productRepository.findBySellerId(sellerId);
     }
 
@@ -198,25 +180,17 @@ public class SellerService {
 
     @Transactional(readOnly = true)
     public List<OrderDetail> getSalesHistory(Integer sellerId) {
-
-        if (!userRepository.existsById(sellerId)) {
-            throw new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId + ", không thể truy xuất lịch sử bán hàng.");
-        }
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
+        
         return orderDetailRepository.findByProduct_SellerId(sellerId);
-    }
-
-    @Transactional
+    }    @Transactional
     public Orders updateOrderStatus(Integer sellerId, Integer orderId, String statusString) {
-        User seller = userRepository.findById(sellerId)
-            .orElseThrow(() -> new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId));
-        if (seller.getRole() != RoleEnum.Seller && seller.getRole() != RoleEnum.Admin) {
-            throw new SecurityException("Người dùng với ID: " + sellerId + " không được cấp quyền để cập nhật trạng thái đơn hàng.");
-        }
-
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
 
         Orders order = orderRepository.findById(orderId)
             .orElseThrow(() -> new EntityNotFoundException("Đơn hàng không tồn tại với ID: " + orderId));
-
 
         boolean sellerInvolvedInOrder = orderDetailRepository.findByProduct_SellerId(sellerId)
             .stream()
@@ -243,10 +217,8 @@ public class SellerService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> getRevenueStatistics(Integer sellerId) {
-
-        if (!userRepository.existsById(sellerId)) {
-            throw new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId);
-        }
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
 
         List<OrderDetail> sellerOrderDetails = orderDetailRepository.findByProduct_SellerId(sellerId);
 
@@ -272,21 +244,14 @@ public class SellerService {
 
 
         return statistics;
-    }
-
-    @Transactional
+    }    @Transactional
     public Orders confirmOrderShipped(Integer sellerId, Integer orderId) {
-        User seller = userRepository.findById(sellerId)
-            .orElseThrow(() -> new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId));
-        if (seller.getRole() != RoleEnum.Seller && seller.getRole() != RoleEnum.Admin) {
-            throw new SecurityException("Người bán " + sellerId + " không được cấp quyền để xác nhận giao hàng.");
-        }
+        // Validate that seller is approved and can perform seller operations
+        validateApprovedSeller(sellerId);
 
-       
         Orders order = orderRepository.findById(orderId)
             .orElseThrow(() -> new EntityNotFoundException("Đơn hàng không tồn tại với ID: " + orderId));
 
-       
         boolean sellerInvolvedInOrder = orderDetailRepository.findByProduct_SellerId(sellerId)
             .stream()
             .anyMatch(detail -> detail.getOrder().getOrderId().equals(orderId));
@@ -326,7 +291,7 @@ public class SellerService {
             .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin người bán với ID: " + sellerId));
         
        
-        sellerEntity.setBusinessStatus(makeActive ? (byte)1 : (byte)0);
+        sellerEntity.setBusinessStatus(makeActive);
         sellerEntity.setUpdatedAt(Timestamp.from(Instant.now()));
         sellerRepository.save(sellerEntity);
 
@@ -345,7 +310,7 @@ public class SellerService {
     }
 
     @Transactional
-    public boolean updateBusinessStatus(Integer sellerId, byte newBusinessStatus) {
+    public boolean updateBusinessStatus(Integer sellerId, boolean newBusinessStatus) {
       
         Seller seller = sellerRepository.findById(sellerId)
             .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người bán với ID: " + sellerId));
@@ -355,8 +320,8 @@ public class SellerService {
         seller.setUpdatedAt(Timestamp.from(Instant.now()));
         
     
-        if (newBusinessStatus == 0) {
-          
+        if (!newBusinessStatus) {
+
             AccountStatusEnum newStatus = AccountStatusEnum.Inactive;
             seller.setAccountStatus(newStatus);
            
@@ -375,8 +340,8 @@ public class SellerService {
             });
             
             System.out.println("Người bán " + sellerId + " đã tắt trạng thái kinh doanh và được đặt thành không hoạt động.");
-        } else if (newBusinessStatus == 1 && seller.getIsApproved()) {
-            
+        } else if (newBusinessStatus && seller.getIsApproved()) {
+
             AccountStatusEnum newStatus = AccountStatusEnum.Active;
             seller.setAccountStatus(newStatus);
             
@@ -448,8 +413,8 @@ public class SellerService {
             newSeller.setAccountStatus(AccountStatusEnum.Inactive);
             newSeller.setCreatedAt(now);
             newSeller.setUpdatedAt(now);
-            newSeller.setBusinessStatus((byte)0);
-            
+            newSeller.setBusinessStatus(false);
+
             // Save the entity using repository
             Seller savedSeller = sellerRepository.save(newSeller);
 
@@ -481,7 +446,7 @@ public class SellerService {
         seller.setIsApproved(true);
         seller.setAccountStatus(AccountStatusEnum.Active);
         seller.setApprovedAt(new Timestamp(System.currentTimeMillis()));
-        seller.setBusinessStatus((byte)1); // Active
+        seller.setBusinessStatus(true); // Active
         seller.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
         
         // Update user role
@@ -513,19 +478,40 @@ public class SellerService {
         return sellerRepository.save(seller);
     }
 
- 
+    @Transactional
+    public void rejectSellerRequest(Integer sellerId, String reason) {
+        Seller seller = sellerRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy yêu cầu người bán với ID: " + sellerId));
+
+        if (seller.getIsApproved()) {
+            throw new IllegalStateException("Yêu cầu người bán này đã được duyệt trước đó và không thể bị từ chối.");
+        }
+
+        // Update seller record
+        seller.setAccountStatus(AccountStatusEnum.Inactive);
+        seller.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
+        // Save the updated seller
+        sellerRepository.save(seller);
+
+        System.out.println("Yêu cầu người bán " + sellerId + " đã bị từ chối. Lý do: " +
+                         (reason != null && !reason.trim().isEmpty() ? reason : "Không có lý do được cung cấp"));
+    }
+
+
     @Transactional
     public User updateSellerStatus(Integer sellerId, Object isActive) {
-        // Convert input parameter to byte value
-        byte newBusinessStatus;
+        // Convert input parameter to Boolean value
+        Boolean newBusinessStatus;
         boolean makeActive;
         
         if (isActive instanceof Boolean) {
             makeActive = (Boolean) isActive;
-            newBusinessStatus = makeActive ? (byte)1 : (byte)0;
+            newBusinessStatus = makeActive;
         } else if (isActive instanceof Byte) {
-            newBusinessStatus = (Byte) isActive;
-            makeActive = newBusinessStatus == 1;
+            byte byteValue = (Byte) isActive;
+            makeActive = byteValue == 1;
+            newBusinessStatus = makeActive;
         } else {
             throw new IllegalArgumentException("Tham số trạng thái phải là Boolean hoặc Byte");
         }
@@ -551,7 +537,7 @@ public class SellerService {
         }
         
         // Check if status isn't changing
-        if (user.getAccountStatus() == newStatus && seller.getBusinessStatus() == newBusinessStatus) {
+        if (user.getAccountStatus() == newStatus && seller.getBusinessStatus().equals(newBusinessStatus)) {
             System.out.println("Người bán " + sellerId + " đã có trạng thái " + newStatus + ". Không thực hiện thay đổi.");
             return user;
         }
@@ -631,14 +617,21 @@ public class SellerService {
         User user = userRepository.findById(sellerId)
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng tương ứng với ID: " + sellerId));
 
-        // Update seller record
+        // Check if already approved
+        if (seller.getIsApproved()) {
+            throw new IllegalStateException("Người bán này đã được xác thực trước đó.");
+        }
+
+        // Update seller record - automatically approve with active business status
         seller.setIsApproved(true);
         seller.setAccountStatus(AccountStatusEnum.Active);
-        seller.setBusinessStatus((byte)1); // Active
+        seller.setBusinessStatus(true); // Active business
+        seller.setApprovedAt(new Timestamp(System.currentTimeMillis())); // Set approval timestamp
         seller.setUpdatedAt(Timestamp.from(Instant.now()));
 
-        // Update user record
+        // Update user record - set role and sync account status
         user.setRole(RoleEnum.Seller);
+        user.setAccountStatus(AccountStatusEnum.Active); // Sync with seller account status
         user.setIsVerified(true);
         user.setUpdatedAt(Timestamp.from(Instant.now()));
 
@@ -673,6 +666,82 @@ public class SellerService {
     @Transactional(readOnly = true)
     public List<Seller> getAllSellers() {
         return sellerRepository.findAll();
+    }
+
+    /**
+     * Helper method to validate that a seller is approved and can perform seller operations
+     * @param sellerId the ID of the seller to validate
+     * @throws EntityNotFoundException if seller doesn't exist
+     * @throws SecurityException if seller is not approved or doesn't have seller role
+     */
+    private void validateApprovedSeller(Integer sellerId) {
+        // Check if user exists and has seller role
+        User seller = userRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Người bán không tồn tại với ID: " + sellerId));
+        
+        if (seller.getRole() != RoleEnum.Seller && seller.getRole() != RoleEnum.Admin) {
+            throw new SecurityException("Người dùng với ID: " + sellerId + " không có quyền truy cập tính năng người bán.");
+        }
+        
+        // For non-admin users, check if their seller request is approved
+        if (seller.getRole() == RoleEnum.Seller) {
+            Seller sellerEntity = sellerRepository.findById(sellerId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin người bán với ID: " + sellerId));
+            
+            if (!sellerEntity.getIsApproved()) {
+                throw new SecurityException("Yêu cầu trở thành người bán của bạn chưa được phê duyệt. Vui lòng chờ admin xác nhận.");
+            }
+            
+            if (sellerEntity.getAccountStatus() != AccountStatusEnum.Active) {
+                throw new SecurityException("Tài khoản người bán của bạn hiện tại không hoạt động. Vui lòng liên hệ admin.");
+            }
+        }
+    }
+
+    @Transactional
+    public User toggleSellerBusinessStatus(Integer sellerId, boolean isActive) {
+        // First validate that seller exists and is approved
+        validateApprovedSeller(sellerId);
+        
+        User user = userRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + sellerId));
+            
+        Seller seller = sellerRepository.findById(sellerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy thông tin người bán với ID: " + sellerId));
+        
+        // Set the new business status
+        Boolean newBusinessStatus = isActive;
+        AccountStatusEnum newAccountStatus = isActive ? AccountStatusEnum.Active : AccountStatusEnum.Inactive;
+        
+        // Check if status isn't changing
+        if (seller.getBusinessStatus() == newBusinessStatus) {
+            System.out.println("Người bán " + sellerId + " đã có trạng thái kinh doanh " + (isActive ? "hoạt động" : "không hoạt động") + ". Không thực hiện thay đổi.");
+            return user;
+        }
+        
+        // Update the seller entity - keep isApproved unchanged
+        seller.setBusinessStatus(newBusinessStatus);
+        seller.setAccountStatus(newAccountStatus);
+        seller.setUpdatedAt(Timestamp.from(Instant.now()));
+        
+        // Update the user entity - sync account status
+        user.setAccountStatus(newAccountStatus);
+        user.setUpdatedAt(Timestamp.from(Instant.now()));
+        
+        // If making inactive, hide all products
+        if (!isActive) {
+            System.out.println("Người bán " + sellerId + " đã tắt trạng thái kinh doanh, nên sản phẩm sẽ bị ẩn.");
+            productRepository.findBySellerId(sellerId).forEach(p -> {
+                p.setIsVisible(false);
+                productRepository.save(p);
+            });
+        } else {
+            System.out.println("Người bán " + sellerId + " đã bật trạng thái kinh doanh.");
+        }
+        
+        // Save both entities
+        sellerRepository.save(seller);
+        return userRepository.save(user);
     }
 }
 

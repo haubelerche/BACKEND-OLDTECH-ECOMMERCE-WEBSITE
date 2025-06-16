@@ -9,7 +9,8 @@ import lombok.*;
 @Builder
 public class CategoryRequest {
     private String name;
-    private String slug;
-
+    private String description;
+    private String avatarUrl;
     private Integer parentCategoryId;
 }
+

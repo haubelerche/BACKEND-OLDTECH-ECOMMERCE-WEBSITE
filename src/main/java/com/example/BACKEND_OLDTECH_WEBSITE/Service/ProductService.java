@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.ArrayList;
 
 @Service
 public class ProductService {
@@ -36,6 +37,10 @@ public class ProductService {
         return productRepository.findAll();
     }
 
+    public List<Product> getProductsByStatus(ProductStatusEnum status) {
+        return productRepository.findByStatus(status);
+    }
+
     @Transactional
     public void markProductAsPending(Integer productId) {
         Product product = productRepository.findById(productId)
@@ -57,6 +62,26 @@ public class ProductService {
     }
 
     @Transactional
+    public void verifyMultipleProducts(List<Integer> productIds) {
+        List<Product> productsToUpdate = new ArrayList<>();
+        Timestamp now = Timestamp.from(Instant.now());
+
+        for (Integer productId : productIds) {
+            productRepository.findById(productId).ifPresent(product -> {
+                product.setStatus(ProductStatusEnum.Approved);
+                product.setIsApproved(true);
+                product.setIsVisible(true);
+                product.setUpdatedAt(now);
+                productsToUpdate.add(product);
+            });
+        }
+
+        if (!productsToUpdate.isEmpty()) {
+            productRepository.saveAll(productsToUpdate);
+        }
+    }
+
+    @Transactional
     public void rejectProduct(Integer productId) {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + productId));
@@ -65,6 +90,26 @@ public class ProductService {
         product.setIsVisible(false);
         product.setUpdatedAt(Timestamp.from(Instant.now()));
         productRepository.save(product);
+    }
+
+    @Transactional
+    public void rejectMultipleProducts(List<Integer> productIds) {
+        List<Product> productsToUpdate = new ArrayList<>();
+        Timestamp now = Timestamp.from(Instant.now());
+
+        for (Integer productId : productIds) {
+            productRepository.findById(productId).ifPresent(product -> {
+                product.setStatus(ProductStatusEnum.Rejected);
+                product.setIsApproved(false);
+                product.setIsVisible(false);
+                product.setUpdatedAt(now);
+                productsToUpdate.add(product);
+            });
+        }
+
+        if (!productsToUpdate.isEmpty()) {
+            productRepository.saveAll(productsToUpdate);
+        }
     }
 
     @Transactional
@@ -77,6 +122,23 @@ public class ProductService {
     }
 
     @Transactional
+    public int hideAllProductsFromSeller(Integer sellerId) {
+        List<Product> sellerProducts = productRepository.findBySellerId(sellerId);
+        if (sellerProducts.isEmpty()) {
+            return 0;
+        }
+
+        Timestamp now = Timestamp.from(Instant.now());
+        for (Product product : sellerProducts) {
+            product.setIsVisible(false);
+            product.setUpdatedAt(now);
+        }
+
+        productRepository.saveAll(sellerProducts);
+        return sellerProducts.size();
+    }
+
+    @Transactional
     public void setProductCategory(Integer productId, Integer categoryId) {
         Product product = productRepository.findById(productId)
             .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + productId));
@@ -84,8 +146,9 @@ public class ProductService {
         Category category = categoryRepository.findById(categoryId.longValue())
             .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy danh mục với ID: " + categoryId));
 
-        product.setCategoryId(categoryId);
+        product.setCategoryId(categoryId.longValue());
         product.setUpdatedAt(Timestamp.from(Instant.now()));
+
         productRepository.save(product);
     }
 }

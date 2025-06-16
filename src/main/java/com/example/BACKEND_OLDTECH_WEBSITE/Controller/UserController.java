@@ -1,5 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
-
+//100% ok
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
@@ -157,7 +157,48 @@ public class UserController {
 
             // Update profile with provided data
             User updatedUser = userService.updateUserProfile(userId, profileData);
-            boolean isNowComplete = !userService.isProfileIncomplete(updatedUser);
+
+            // Check all required fields
+            Map<String, Boolean> missingFields = new HashMap<>();
+
+            // Check basic personal info
+            if (updatedUser.getFirstName() == null || updatedUser.getFirstName().trim().isEmpty()) {
+                missingFields.put("firstName", true);
+            }
+            if (updatedUser.getLastName() == null || updatedUser.getLastName().trim().isEmpty()) {
+                missingFields.put("lastName", true);
+            }
+            if (updatedUser.getDob() == null) {
+                missingFields.put("dateOfBirth", true);
+            }
+
+            // Check contact info
+            if (updatedUser.getPhoneNumber() == null ||
+                    updatedUser.getPhoneNumber().trim().isEmpty() ||
+                    updatedUser.getPhoneNumber().startsWith("placeholder_")) {
+                missingFields.put("phoneNumber", true);
+            }
+
+            // Check verification images
+            if (updatedUser.getSelfiePicUrl() == null || updatedUser.getSelfiePicUrl().trim().isEmpty()) {
+                missingFields.put("selfiePicUrl", true);
+            }
+            if (updatedUser.getFrontImageUrl() == null || updatedUser.getFrontImageUrl().trim().isEmpty()) {
+                missingFields.put("frontImageUrl", true);
+            }
+            if (updatedUser.getBackImageUrl() == null || updatedUser.getBackImageUrl().trim().isEmpty()) {
+                missingFields.put("backImageUrl", true);
+            }
+
+            // Check additional required fields
+            if (updatedUser.getRefundMomoAccount() == null || updatedUser.getRefundMomoAccount().trim().isEmpty()) {
+                missingFields.put("refundMomoAccount", true);
+            }
+            if (updatedUser.getFixedLocation() == null || updatedUser.getFixedLocation().trim().isEmpty()) {
+                missingFields.put("fixedLocation", true);
+            }
+
+            boolean isNowComplete = missingFields.isEmpty();
 
             Map<String, Object> response = new HashMap<>();
             response.put("userId", userId);
@@ -174,18 +215,6 @@ public class UserController {
             } else if (isNowComplete) {
                 response.put("message", "Hồ sơ của bạn đã được cập nhật thành công.");
             } else {
-                // Identify what's still missing
-                Map<String, Boolean> missingFields = new HashMap<>();
-                if (updatedUser.getDob() == null) {
-                    missingFields.put("dateOfBirth", true);
-                }
-
-                if (updatedUser.getPhoneNumber() == null ||
-                        updatedUser.getPhoneNumber().startsWith("placeholder_") ||
-                        updatedUser.getPhoneNumber().startsWith("+")) {
-                    missingFields.put("phoneNumber", true);
-                }
-
                 response.put("missingFields", missingFields);
                 response.put("message", "Hồ sơ đã được cập nhật nhưng vẫn chưa hoàn tất. Vui lòng bổ sung thông tin còn thiếu.");
             }
@@ -287,4 +316,3 @@ public class UserController {
 
 
     }
-

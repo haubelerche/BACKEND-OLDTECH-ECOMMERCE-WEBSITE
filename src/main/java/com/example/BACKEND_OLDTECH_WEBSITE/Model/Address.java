@@ -1,48 +1,49 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
+
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AddressTypeEnum;
 import jakarta.persistence.*;
-import lombok.*;
-import java.sql.Timestamp;
+import lombok.Data;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+
 @Entity
-@Table(name = "address")
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class Address {
-    @Id
+@Table(name = "address")
+public class Address {    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "address_id", columnDefinition = "INT UNSIGNED")
+    @Column(name = "address_id")
     private Integer addressId;
 
-    @Column(name = "user_id", columnDefinition = "INT UNSIGNED")
+    @Column(name="user_id", nullable = false)
     private Integer userId;
 
+    @Column(name="city", nullable = false)
     private String city;
 
+    @Column(name="district", nullable = false)
     private String district;
 
+    @Column(name="ward", nullable = false)
     private String ward;
 
-    @Column(name = "street")
+    @Column(name="street", nullable = false)
     private String street;
 
-    @Column(name = "detailed_address")
-    private String detailedAddress;
-
+    @Column(name="detailed_address", nullable = false)
+    private String detailedAddress;    @Enumerated(EnumType.STRING)
     @Column(name = "address_type")
     private AddressTypeEnum addressType;
 
-    @Column(name = "is_default")
-    private Boolean isDefault;
+    @Column(name="is_default", nullable = false)
+    private Boolean isDefault = false;
 
-    @Column(name = "created_at")
-    private Timestamp createdAt;
+    @CreationTimestamp
+    @Column(name="created_at", nullable = false)
+    private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
-    private Timestamp updatedAt;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", referencedColumnName = "user_id", insertable = false, updatable = false)
-    private User user;
+    @UpdateTimestamp
+    @Column(name="updated_at", nullable = false)
+    private LocalDateTime updatedAt;
 }

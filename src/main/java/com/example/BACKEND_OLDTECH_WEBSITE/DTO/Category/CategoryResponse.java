@@ -1,7 +1,8 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Category;
-//GET
+
 import lombok.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Getter
@@ -12,10 +13,12 @@ import java.util.List;
 public class CategoryResponse {
     private Integer category_id;
     private String name;
-    private String slug;
+    private String description;
+    private String avatarUrl;
     private Long parent_category_id;
     private boolean isVisible;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
     private List<CategoryResponse> subCategories;
 }
 
-//slug is a help to create a friendly url. easier to read from url

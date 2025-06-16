@@ -11,7 +11,8 @@ public class SellerRegisterResponse {
     private String momoAccount;
     private Boolean isApproved;
     private AccountStatusEnum accountStatus;
-    private Byte businessStatus;
+    private Boolean businessStatus;
     private Timestamp createdAt;
     private Timestamp updatedAt;
 }
+

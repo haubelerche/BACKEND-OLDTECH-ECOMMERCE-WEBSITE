@@ -22,28 +22,36 @@ public class Product {
     @Column(name = "product_id", columnDefinition = "INT UNSIGNED", nullable = false)
     private Integer productId;
 
-    @Column(columnDefinition = "INT UNSIGNED")
+    @Column(name = "seller_id", columnDefinition = "INT UNSIGNED")
     private Integer sellerId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "seller_id", insertable = false, updatable = false)
     private Seller seller;
 
-    @Column(columnDefinition = "INT UNSIGNED")
-    private Integer categoryId;
+    @Column(name = "category_id", columnDefinition = "BIGINT UNSIGNED")
+    private Long categoryId;
 
+    @Column(name = "name")
     private String name;
 
+    @Column(name = "description")
     private String description;
 
+    @Column(name = "price")
     private BigDecimal price;
 
+    @Column(name = "status")
+    @Enumerated(EnumType.STRING)
     private ProductStatusEnum status;
 
+    @Column(name = "is_approved")
     private Boolean isApproved;
 
+    @Column(name = "created_at")
     private Timestamp createdAt;
 
+    @Column(name = "updated_at")
     private Timestamp updatedAt;
 
     @Builder.Default
@@ -51,3 +59,4 @@ public class Product {
     private Boolean isVisible = true; 
     
 }
+

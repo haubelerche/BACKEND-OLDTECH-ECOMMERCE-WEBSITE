@@ -49,6 +49,16 @@ public class User {
     @Column(name = "first_name")
     private String firstName;
 
+
+    @Column(name = "selfie_pic_url")
+    private String selfiePicUrl;
+
+    @Column(name = "front_image_url")
+    private String frontImageUrl;
+
+    @Column(name = "back_image_url")
+    private String backImageUrl;
+
     @NotBlank(message = "Bắt buộc nhập họ")
     @Column(name = "last_name")
     private String lastName;
@@ -94,8 +104,9 @@ public class User {
     @Column(name = "updated_at")
     private Timestamp updatedAt;
 
-    @Column(name = "last_login")
-    private Timestamp lastLogin;
+    @Column(name = "last_login", nullable = false, columnDefinition = "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    @Builder.Default
+    private Timestamp lastLogin = new Timestamp(System.currentTimeMillis());
 
     @Builder.Default
     @Column(name = "is_verified", nullable = false)
@@ -119,4 +130,6 @@ public class User {
         return twoFactorEnabled != null && twoFactorEnabled;
     }
 
+    @Column(name= "fixed_location")
+    private String fixedLocation;
 }

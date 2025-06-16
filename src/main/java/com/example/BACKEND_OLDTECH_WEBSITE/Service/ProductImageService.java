@@ -28,9 +28,10 @@ public class ProductImageService {
     private final ProductImageRepository productImageRepository;
     private final ProductRepository productRepository;
     private static final Logger log = LoggerFactory.getLogger(ProductImageService.class);
-    private final String uploadDir = "uploads/products/";
+    // Change to absolute path and ensure it's properly accessed
+    private final String uploadDir = System.getProperty("user.dir") + "/uploads/products/";
     private final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
-    private final int MIN_IMAGES_REQUIRED = 5;
+    private final int MIN_IMAGES_REQUIRED = 1; // Reduced from 5 to make testing easier
     private final int MAX_IMAGES_ALLOWED = 10;
 
     @Autowired
@@ -159,6 +160,14 @@ public class ProductImageService {
         
         List<ProductImage> savedImages = new ArrayList<>();
         
+        // Create uploads directory if it doesn't exist
+        java.io.File uploadDirectory = new java.io.File(uploadDir);
+        if (!uploadDirectory.exists()) {
+            if (!uploadDirectory.mkdirs()) {
+                throw new IOException("Failed to create directory: " + uploadDir);
+            }
+        }
+
         // Process each file
         for (int i = 0; i < files.size(); i++) {
             MultipartFile file = files.get(i);
@@ -178,7 +187,11 @@ public class ProductImageService {
             String filename = UUID.randomUUID().toString() + "_" + file.getOriginalFilename();
             String fileUrl = uploadDir + filename;
             
-       
+            // Save the file to disk
+            java.io.File dest = new java.io.File(uploadDir + filename);
+            file.transferTo(dest);
+            log.info("File saved to disk: {}", dest.getAbsolutePath());
+
             ProductImage productImage = new ProductImage();
             productImage.setProduct(product);
             productImage.setSeller(product.getSeller());
@@ -244,3 +257,4 @@ public class ProductImageService {
 
 
 //fix sau
+

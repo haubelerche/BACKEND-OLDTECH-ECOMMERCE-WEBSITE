@@ -1,33 +1,42 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Address;
 
-import lombok.Data;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AddressTypeEnum;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-
-import java.util.List;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
 
 @Data
 public class AddressRequest {
-    @NotBlank(message = "Tên thành phố không được để trống")
-    @Size(min = 3, max = 100, message = "Tên thành phố phải có độ dài từ 3 đến 100 ký tự")
+    @NotBlank(message = "Thành phố không được để trống")
     private String city;
 
-    @NotBlank(message = "Tên quận/huyện không được để trống")
-    @Size(min = 3, max = 100, message = "Tên quận/huyện phải có độ dài từ 3 đến 100 ký tự")
+    @NotBlank(message = "Quận/Huyện không được để trống")
     private String district;
 
-    @NotBlank(message = "Tên phường/xã không được để trống")
-    @Size(min = 3, max = 100, message = "Tên phường/xã phải có độ dài từ 3 đến 100 ký tự")
+    @NotBlank(message = "Phường/Xã không được để trống")
     private String ward;
 
-    @NotBlank(message = "Tên đường không được để trống")
-    @Size(min = 3, max = 255, message = "Tên đường phải có độ dài từ 3 đến 255 ký tự")
+    @NotBlank(message = "Đường không được để trống")
     private String street;
-    @NotBlank(message = "Tên đia chỉ chi tiết không được để trống")
+
+    @NotBlank(message = "Địa chỉ chi tiết không được để trống")
     private String detailedAddress;
 
-    @NotBlank(message = "Loại địa chỉ không được để trống")
-    private String addressType;
-    private Boolean isDefault;
-    private List<AddressResponse> addresses;
+    @NotNull(message = "Loại địa chỉ không được để trống")
+    private AddressTypeEnum addressType;
+
+    private Boolean isDefault = false;
+
+    @Override
+    public String toString() {
+        return "AddressRequest{" +
+                "city='" + city + '\'' +
+                ", district='" + district + '\'' +
+                ", ward='" + ward + '\'' +
+                ", street='" + street + '\'' +
+                ", detailedAddress='" + detailedAddress + '\'' +
+                ", addressType=" + addressType +
+                ", isDefault=" + isDefault +
+                '}';
+    }
 }

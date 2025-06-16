@@ -1,5 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Review.ReviewRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
@@ -29,38 +30,48 @@ public class ReviewService {
     private UserRepository userRepository;
 
     /**
-     * Creates a review for a seller with a tagged product
+     * Creates a review for a seller based on an order with a specific product
      */
     @Transactional
-    public Review createSellerReview(Integer sellerId, Review review) {
-        // Validate seller exists
-        if (!userRepository.existsById(sellerId)) {
-            throw new EntityNotFoundException("Không tìm thấy người bán với ID: " + sellerId);
+    public Review createReview(ReviewRequest reviewRequest, Integer reviewerId) {
+        // Verify the reviewer exists
+        User reviewer = userRepository.findById(reviewerId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + reviewerId));
+
+        // Verify the reviewer has Customer role
+        if (reviewer.getRole() != RoleEnum.Customer) {
+            throw new IllegalArgumentException("Chỉ khách hàng mới có thể đánh giá người bán");
         }
 
-        // Validate reviewer exists
-        if (review.getReviewerId() == null || !userRepository.existsById(review.getReviewerId())) {
-            throw new EntityNotFoundException("Không tìm thấy người đánh giá với ID: " + review.getReviewerId());
+        // Verify the product exists
+        Product product = productRepository.findById(reviewRequest.getProductId())
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + reviewRequest.getProductId()));
+
+        // Get seller from product
+        Integer sellerId = product.getSellerId();
+        if (sellerId == null) {
+            throw new IllegalArgumentException("Sản phẩm không có người bán");
         }
 
-        // Validate rating is between 1-5
-        if (review.getRating() == null || review.getRating() < 1 || review.getRating() > 5) {
-            throw new IllegalArgumentException("Đánh giá phải có giá trị từ 1 đến 5 sao");
-        }
-
-        // Validate product exists if a product ID is provided
-        if (review.getProductId() != null) {
-            Product product = productRepository.findById(review.getProductId())
-                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm với ID: " + review.getProductId()));
-
-            // Ensure the product belongs to the seller being reviewed
-            if (!product.getSellerId().equals(sellerId)) {
-                throw new IllegalArgumentException("Sản phẩm được gắn thẻ không thuộc về người bán này");
+        // Check if this reviewer has already reviewed this order/product combination
+        List<Review> existingReviews = reviewRepository.findByOrderId(reviewRequest.getOrderId());
+        for (Review existingReview : existingReviews) {
+            if (existingReview.getReviewerId().equals(reviewerId) &&
+                existingReview.getProductId().equals(reviewRequest.getProductId())) {
+                throw new IllegalArgumentException("Bạn đã đánh giá sản phẩm này trong đơn hàng này rồi");
             }
         }
 
+        // Create and save the review
+        Review review = new Review();
+        review.setOrderId(reviewRequest.getOrderId());
+        review.setProductId(reviewRequest.getProductId());
+        review.setReviewerId(reviewerId);
         review.setSellerId(sellerId);
+        review.setRating(reviewRequest.getRating());
+        review.setReview(reviewRequest.getReview());
         review.setReviewTime(Timestamp.from(Instant.now()));
+
         return reviewRepository.save(review);
     }
 
@@ -77,6 +88,13 @@ public class ReviewService {
      */
     public List<Review> getReviewsBySeller(Integer sellerId) {
         return reviewRepository.findBySellerId(sellerId);
+    }
+
+    /**
+     * Get all reviews for an order
+     */
+    public List<Review> getReviewsByOrder(Integer orderId) {
+        return reviewRepository.findByOrderId(orderId);
     }
 
     /**

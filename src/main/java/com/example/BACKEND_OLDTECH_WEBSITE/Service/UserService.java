@@ -57,14 +57,13 @@ public class UserService implements UserDetailsService {
     private final SellerRepository sellerRepository;
     private final ProductRepository productRepository;
     private final ProductImageRepository productImageRepository;
-    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
 
     @PersistenceContext
     private EntityManager entityManager;
 
     @Autowired
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, ComplaintRepository complaintRepository, NotificationRepository notificationRepository, VerificationDetailRepository verificationDetailRepository, AddressRepository addressRepository, OrderRepository orderRepository, RefundRepository refundRepository, SellerRepository sellerRepository, ProductRepository productRepository, ProductImageRepository productImageRepository, PasswordResetTokenRepository passwordResetTokenRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, ComplaintRepository complaintRepository, NotificationRepository notificationRepository, VerificationDetailRepository verificationDetailRepository, AddressRepository addressRepository, OrderRepository orderRepository, RefundRepository refundRepository, SellerRepository sellerRepository, ProductRepository productRepository, ProductImageRepository productImageRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.complaintRepository = complaintRepository;
@@ -76,7 +75,6 @@ public class UserService implements UserDetailsService {
         this.sellerRepository = sellerRepository;
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
-        this.passwordResetTokenRepository = passwordResetTokenRepository;
     }
 
     public boolean existsByEmail(String email) {
@@ -745,35 +743,7 @@ public class UserService implements UserDetailsService {
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
     }
 
-    @Transactional
-    public String createPasswordResetTokenForUser(User user) {
-        log.info("Creating password reset token for user: {}", user.getEmail());
 
-        // Delete any existing token for this user
-        passwordResetTokenRepository.deleteByUser(user);
-
-        // Generate a unique token
-        String token = UUID.randomUUID().toString();
-
-        // Create a new token with expiration (default: 24 hours)
-        PasswordResetToken resetToken = new PasswordResetToken();
-        resetToken.setToken(token);
-        resetToken.setUser(user);
-        resetToken.setExpiryDate(Timestamp.from(Instant.now().plus(Duration.ofHours(24))));
-
-        passwordResetTokenRepository.save(resetToken);
-
-        log.info("Password reset token created for user ID: {}", user.getUserId());
-        return token;
-    }
-
-    @Transactional(readOnly = true)
-    public PasswordResetToken getPasswordResetToken(String token) {
-        log.info("Retrieving password reset token");
-        return passwordResetTokenRepository.findByToken(token)
-                .filter(resetToken -> resetToken.getExpiryDate().after(new Timestamp(System.currentTimeMillis())))
-                .orElse(null);
-    }
 
     @Transactional
     public void changeUserPassword(User user, String newPassword) {
@@ -877,6 +847,7 @@ public class UserService implements UserDetailsService {
      */
     @Transactional
     public void sendProfileSubmittedForVerificationNotification(User user) {
+        // Create notification for user
         Notification notification = new Notification();
         notification.setUser(user);
         notification.setMessage("Hồ sơ của bạn đã được gửi tới admin để xác thực. Bạn sẽ nhận được thông báo khi quá trình xác thực hoàn tất.");
@@ -885,7 +856,21 @@ public class UserService implements UserDetailsService {
         notification.setNotificationType(NotificationTypeEnum.AdminMessage);
         notificationRepository.save(notification);
 
+        // Create verification details record in the database
+        VerificationDetail verificationDetail = new VerificationDetail();
+        verificationDetail.setUser(user);
+        verificationDetail.setIsApproved(null); // Pending approval
+        verificationDetail.setSelfiePicUrl(user.getSelfiePicUrl());
+        verificationDetail.setFrontImageUrl(user.getFrontImageUrl());
+        verificationDetail.setBackImageUrl(user.getBackImageUrl());
+        verificationDetail.setCreatedAt(new Timestamp(System.currentTimeMillis()));
+        verificationDetail.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+
+        // Save the verification detail to database
+        verificationDetailRepository.save(verificationDetail);
+
         log.info("Sent profile submitted for verification notification to user ID: {}", user.getUserId());
+        log.info("Created verification details record for user ID: {}", user.getUserId());
 
         // Also send notification to admin about the new profile verification request
         sendAdminNotificationForVerificationRequest(user);

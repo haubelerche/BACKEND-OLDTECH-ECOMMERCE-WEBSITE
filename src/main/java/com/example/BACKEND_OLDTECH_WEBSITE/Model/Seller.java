@@ -9,6 +9,8 @@ import java.sql.Timestamp;
 
 @Entity
 @Table(name = "seller")
+@Getter
+@Setter
 @Data
 @Builder
 @NoArgsConstructor
@@ -40,5 +42,6 @@ public class Seller {
     private Timestamp updatedAt;
 
     @Builder.Default
-    @Column(name = "business_status", columnDefinition = "TINYINT(1) DEFAULT '1'")
-    private Byte businessStatus = 1;  }
+    @Column(name = "business_status")
+    private Boolean businessStatus = true;
+}

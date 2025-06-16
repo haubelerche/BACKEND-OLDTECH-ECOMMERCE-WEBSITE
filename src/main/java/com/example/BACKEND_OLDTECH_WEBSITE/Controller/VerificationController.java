@@ -40,10 +40,13 @@ public class VerificationController {
 //LẤY DANH SÁCH TOÀN BỘ NGƯỜI CHỜ XÁC THỰC
     @GetMapping("/admin/pending")
     @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
-    public String showPendingVerifications(Model model) {
-        List<VerificationDetail> pendingList = verificationService.getPendingVerifications();
-        model.addAttribute("pendingVerifications", pendingList);
-        return "admin/pending";
+    public ResponseEntity<?> showPendingVerifications() {
+        try {
+            List<VerificationDetail> pendingList = verificationService.getPendingVerifications();
+            return ResponseEntity.ok().body(pendingList);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error retrieving pending verifications: " + e.getMessage());
+        }
     }
 
 
@@ -116,7 +119,3 @@ public class VerificationController {
             return "error/500";
         }
     }}
-
-
-
-

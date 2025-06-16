@@ -153,37 +153,16 @@ public class AuthController {
 
 
 //QUÊN MẬT KHẨU
-    @PostMapping("/forgot-password")
-    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordRequest forgotPasswordRequest) {
-        try {
-            String result = authenticationService.handleForgotPassword(forgotPasswordRequest.getEmail());
-            return ResponseEntity.ok(result);
-        } catch (UsernameNotFoundException e) {
-            // Even if user not found, return a generic message to prevent email enumeration
-            return ResponseEntity.ok("Nếu email của bạn tồn tại trong hệ thống, một liên kết đặt lại mật khẩu đã được gửi.");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Lỗi yêu cầu đặt lại mật khẩu: " + e.getMessage());
-        }
-    }
 
 
 
 
-//ĐẶT LẠI MẬT KHẨU
-    @PostMapping("/reset-password")
-    public ResponseEntity<?> resetPassword(@Valid @RequestBody ResetPasswordRequest resetPasswordRequest) {
-        try {
-            String result = authenticationService.handleResetPassword(
-                resetPasswordRequest.getToken(),
-                resetPasswordRequest.getNewPassword()
-            );
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Lỗi đặt lại mật khẩu: " + e.getMessage());
-        }
-    }
+
+
+
+
+
+
 
 
 

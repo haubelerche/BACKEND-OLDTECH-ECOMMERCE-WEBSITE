@@ -3,22 +3,18 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Product.ProductRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller.SellerRegisterRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller.SellerRegisterResponse;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Seller.SellerVerifyRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
-import com.example.BACKEND_OLDTECH_WEBSITE.Service.ProductImageService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.SellerService;
-import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,40 +25,55 @@ import java.util.Map;
 public class SellerController {
 
     private final SellerService sellerService;
-    private final ProductImageService productImageService;
-    private final UserService userService;
 
     @Autowired
-    public SellerController(SellerService sellerService, ProductImageService productImageService, UserService userService) {
+    public SellerController(SellerService sellerService) {
         this.sellerService = sellerService;
-        this.productImageService = productImageService;
-        this.userService = userService;
     }
 
 
+    /*---DÀNH CHO ADMIN---*/
 
-
-
-
-/*---DÀNH CHO ADMIN---*/
-
-
-//XÁC THỰC NGƯỜI BÁN
-    @PostMapping("/sellers/verify/{sellerId}")
-    public ResponseEntity<?> verifySeller(@PathVariable Integer sellerId) {
+    //XÁC THỰC NGƯỜI BÁN
+    //ok
+    @PostMapping("/verify/{sellerId}")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> verifySeller(@PathVariable Integer sellerId, @RequestBody SellerVerifyRequest request) {
         try {
-            sellerService.verifySeller(sellerId);
+            // Check if admin is approving or rejecting the seller
+            boolean isApproving = request.getIsApproved() == null || request.getIsApproved();
 
-            // Return a proper JSON response
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("message", "Người bán " + sellerId + " đã được xác thực thành công.");
-            response.put("sellerId", sellerId);
+            if (isApproving) {
+                // Automatically set business status to 1 (active), account_status to Active
+                sellerService.verifySeller(sellerId);
 
-            return ResponseEntity
-                    .ok()
-                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                    .body(response);
+                Map<String, Object> response = new HashMap<>();
+                response.put("status", "success");
+                response.put("message", "Yêu cầu trở thành người bán đã được phê duyệt");
+                response.put("sellerId", sellerId);
+                response.put("isApproved", true);
+                response.put("businessStatus", 1);
+                response.put("accountStatus", "Active");
+
+                return ResponseEntity
+                        .ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(response);
+            } else {
+                // If admin is rejecting the seller request
+                sellerService.rejectSellerRequest(sellerId, request.getReason());
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("status", "failed");
+                response.put("message", "Đã từ chối yêu cầu trở thành người bán cho người dùng " + sellerId);
+                response.put("sellerId", sellerId);
+                response.put("isApproved", false);
+
+                return ResponseEntity
+                        .ok()
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(response);
+            }
         } catch (EntityNotFoundException e) {
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("status", "error");
@@ -70,7 +81,7 @@ public class SellerController {
 
             return ResponseEntity
                     .status(HttpStatus.NOT_FOUND)
-                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.APPLICATION_JSON)
                     .body(errorResponse);
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
@@ -79,34 +90,16 @@ public class SellerController {
 
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.APPLICATION_JSON)
                     .body(errorResponse);
         }
     }
 
 
+    /*---DÀNH CHO NGƯỜI BÁN---*/
 
-
-//LẤY DS TẤT CẢ NGƯỜI BÁN
-    @GetMapping("/sellers")
-    public ResponseEntity<?> getAllSellers() {
-        try {
-            List<Seller> sellers = sellerService.getAllSellers();
-            return ResponseEntity.ok(sellers);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lấy danh sách người bán: " + e.getMessage());
-        }
-    }
-
-
-
-
-
-
-/*---DÀNH CHO NGƯỜI BÁN---*/
-
-//YÊU CẦU TRỞ THÀNH NGƯỜI BÁN
-@PostMapping("/apply")
+    //YÊU CẦU TRỞ THÀNH NGƯỜI BÁN //ok
+    @PostMapping("/apply/seller")
     public ResponseEntity<?> applyToBecomeSeller(@RequestBody SellerRegisterRequest request) {
         try {
             if (request.getMomoAccount() == null || request.getMomoAccount().trim().isEmpty()) {
@@ -124,7 +117,7 @@ public class SellerController {
             if (request.getPolicyAgreement() == null || !request.getPolicyAgreement()) {
                 System.out.println("DEBUG - Policy agreement not accepted in request");
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body("Bạn phải đồng ý với chính sách người bán của O'Tech để tiếp tục");
+                        .body("Bạn phải đồng ý với chính sách người bán của O'Tech để tiếp tục");
             }
 
             System.out.println("DEBUG - Calling sellerService.requestToBecomeSeller with userId: " + userId);
@@ -201,24 +194,52 @@ public class SellerController {
     }
 
 
-
-
-
-// ĐĂNG KÍ SẢN PHẨM BÁN
-    @PostMapping("/products/{sellerId}")
-    public ResponseEntity<?> addProduct(@PathVariable Integer sellerId, @PathVariable ProductRequest request) {
+    // ĐĂNG KÍ SẢN PHẨM BÁN  //ok
+    @PostMapping(path = "register/product/{sellerId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('Seller')")
+    public ResponseEntity<?> addProduct(@PathVariable Integer sellerId, @RequestBody ProductRequest request) {
         try {
+            // Validate that price is provided
+            if (request.getPrice() == null) {
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body("Giá sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
+            }
+
+            // Validate name and description as well for completeness
+            if (request.getName() == null || request.getName().trim().isEmpty()) {
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body("Tên sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
+            }
+
+            if (request.getDescription() == null || request.getDescription().trim().isEmpty()) {
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body("Mô tả sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
+            }
+
+            if (request.getCategoryName() == null || request.getCategoryName().trim().isEmpty()) {
+                return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body("Danh mục sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
+            }
+
             Product addedProduct = sellerService.addProduct(
-                sellerId,
-                request.getName(),
-                request.getDescription(),
-                request.getPrice(),
-                request.getCategoryName()
+                    sellerId,
+                    request.getName(),
+                    request.getDescription(),
+                    request.getPrice(),
+                    request.getCategoryName()
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(addedProduct);
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
+            // Check if it's specifically about seller approval
+            if (e.getMessage().contains("chưa được phê duyệt") || e.getMessage().contains("không hoạt động")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            }
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi thêm sản phẩm: " + e.getMessage());
@@ -226,12 +247,9 @@ public class SellerController {
     }
 
 
-
-
-
-
-//CẬP NHẬT THÔNG TIN SẢN PHẨM
-    @PutMapping("/{sellerId}/products/{productId}")
+    //CẬP NHẬT THÔNG TIN SẢN PHẨM  //ok
+    @PutMapping("/update/product/{sellerId}/{productId}")
+    @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> updateProduct(@PathVariable Integer sellerId, @PathVariable Integer productId, @RequestBody Product product) {
         try {
             Product updatedProduct = sellerService.updateProduct(sellerId, productId, product);
@@ -239,6 +257,10 @@ public class SellerController {
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
+            // Check if it's specifically about seller approval
+            if (e.getMessage().contains("chưa được phê duyệt") || e.getMessage().contains("không hoạt động")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            }
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật sản phẩm: " + e.getMessage());
@@ -246,11 +268,9 @@ public class SellerController {
     }
 
 
-    
-
-
-//XÓA SẢN PHẨM
-    @DeleteMapping("/{sellerId}/products/{productId}")
+    //XÓA SẢN PHẨM
+    @DeleteMapping("/delete/product/{sellerId}/{productId}")
+    @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> deleteProduct(@PathVariable Integer sellerId, @PathVariable Integer productId) {
         try {
             sellerService.deleteProduct(sellerId, productId);
@@ -258,33 +278,40 @@ public class SellerController {
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
+            // Check if it's specifically about seller approval
+            if (e.getMessage().contains("chưa được phê duyệt") || e.getMessage().contains("không hoạt động")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            }
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi xóa sản phẩm: " + e.getMessage());
         }
     }
 
-
-
-
-//LẤY DANH SÁCH SẢN PHẨM
-    @GetMapping("/{sellerId}/products")
+    //LẤY DANH SÁCH SẢN PHẨM
+    @GetMapping("list/products/{sellerId}/products")
+    @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> getProducts(@PathVariable Integer sellerId) {
         try {
             List<Product> products = sellerService.getProductsBySeller(sellerId);
             return ResponseEntity.ok(products);
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (SecurityException e) {
+            // Check if it's specifically about seller approval
+            if (e.getMessage().contains("chưa được phê duyệt") || e.getMessage().contains("không hoạt động")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            }
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lấy danh sách sản phẩm: " + e.getMessage());
         }
     }
 
-
-
-
-//TRẢ LỜI ĐÁNH GIÁ NGƯỜI MUA
-    @PostMapping("/{sellerId}/reviews/{reviewId}/respond")
+    //TRẢ LỜI ĐÁNH GIÁ NGƯỜI MUA
+    //TODO: RECHECK AFTER FINISH THE REVIEW FUNCTIONALITY
+    @PostMapping("/respond_reviews/{sellerId}/{reviewId}")
+    @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> respondToReview(@PathVariable Integer sellerId, @PathVariable Integer reviewId, @RequestBody String response) {
         try {
             Review review = sellerService.respondToReview(sellerId, reviewId, response);
@@ -292,132 +319,105 @@ public class SellerController {
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
+            // Check if it's specifically about seller approval
+            if (e.getMessage().contains("chưa được phê duyệt") || e.getMessage().contains("không hoạt động")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            }
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi phản hồi đánh giá: " + e.getMessage());
         }
     }
 
-
-
-
-//LẤY LỊCH SỬ BÁN HÀNG
-    @GetMapping("/{sellerId}/sales")
-    public ResponseEntity<?> getSalesHistory(@PathVariable Integer sellerId) {
+    //TẠM NGƯNG HOẶC TIẾP TỤC KINH DOANH (CHỈ DÀNH CHO NGƯỜI BÁN)
+    @PutMapping("/toggle-business/{sellerId}")
+    @PreAuthorize("hasAuthority('Seller')")
+    public ResponseEntity<?> toggleBusinessStatus(@PathVariable Integer sellerId, @RequestBody(required = false) Map<String, Object> request) {
         try {
-            List<OrderDetail> salesHistory = sellerService.getSalesHistory(sellerId);
-            return ResponseEntity.ok(salesHistory);
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lấy lịch sử bán hàng: " + e.getMessage());
-        }
-    }
+            // Check if explicit state is provided or we should toggle
+            boolean isActive;
 
+            // If request is null, get the current status and toggle it
+            if (request == null || request.isEmpty()) {
 
+                Seller seller = sellerService.getSellerById(sellerId);
 
-
-
-//CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG
-    @PutMapping("/{sellerId}/orders/{orderId}/status")
-    public ResponseEntity<?> updateOrderStatus(@PathVariable Integer sellerId, @PathVariable Integer orderId, @RequestParam String status) {
-        try {
-            Orders updatedOrder = sellerService.updateOrderStatus(sellerId, orderId, status);
-            return ResponseEntity.ok(updatedOrder);
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật trạng thái đơn hàng: " + e.getMessage());
-        }
-    }
-
-
-
-
-
-
-//XÁC NHẬN ĐÃ GIAO HÀNG
-    @PostMapping("/{sellerId}/orders/{orderId}/ship")
-    public ResponseEntity<?> confirmOrderShipped(@PathVariable Integer sellerId, @PathVariable Integer orderId) {
-        try {
-            Orders shippedOrder = sellerService.confirmOrderShipped(sellerId, orderId);
-            return ResponseEntity.ok(shippedOrder);
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi xác nhận đã giao hàng: " + e.getMessage());
-        }
-    }
-
-
-
-//THỐNG KÊ DOANH THU
-    @GetMapping("/{sellerId}/statistics/revenue")
-    public ResponseEntity<?> getRevenueStatistics(@PathVariable Integer sellerId) {
-        try {
-            Map<String, Object> statistics = sellerService.getRevenueStatistics(sellerId);
-            return ResponseEntity.ok(statistics);
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lấy thống kê doanh thu: " + e.getMessage());
-        }
-    }
-
-
-
-
-//CẬP NHẬT TRẠNG THÁI NGƯỜI BÁN
-    @PutMapping("/{sellerId}/status")
-    public ResponseEntity<?> updateSellerStatus(@PathVariable Integer sellerId, @RequestParam(required = false) Boolean active, @RequestParam(required = false) Byte status) {
-        try {
-            // Determine which parameter to use (prioritize active if both are provided)
-            Object activeStatus;
-            if (active != null) {
-                activeStatus = active;
-            } else if (status != null) {
-                activeStatus = status;
+                isActive = !seller.getBusinessStatus();
             } else {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Phải cung cấp tham số 'active' hoặc 'status'");
+                // Check for "businessStatus" parameter (primary parameter)
+                if (request.containsKey("businessStatus")) {
+                    Object businessStatusObj = request.get("businessStatus");
+                    if (businessStatusObj instanceof Boolean) {
+                        isActive = (Boolean) businessStatusObj;
+                    } else if (businessStatusObj instanceof String) {
+                        isActive = Boolean.parseBoolean((String) businessStatusObj);
+                    } else {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body("Tham số 'businessStatus' không hợp lệ. Phải là boolean hoặc string.");
+                    }
+                }
+                // Check for "active" parameter (supporting older clients)
+                else if (request.containsKey("active")) {
+                    Object activeObj = request.get("active");
+                    if (activeObj instanceof Boolean) {
+                        isActive = (Boolean) activeObj;
+                    } else if (activeObj instanceof String) {
+                        isActive = Boolean.parseBoolean((String) activeObj);
+                    } else {
+                        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body("Tham số 'active' không hợp lệ. Phải là boolean hoặc string.");
+                    }
+                } else {
+                    // No recognized parameter - get current status and toggle it
+                    Seller seller = sellerService.getSellerById(sellerId);
+                    isActive = !seller.getBusinessStatus();
+                }
             }
 
-            User user = sellerService.updateSellerStatus(sellerId, activeStatus);
-            return ResponseEntity.ok(user);
+            // Update seller's business status using the service method
+            boolean updated = sellerService.updateBusinessStatus(sellerId, isActive ? true : false);
+
+            // Create response
+            Map<String, Object> response = new HashMap<>();
+            response.put("sellerId", sellerId);
+            response.put("businessStatus", isActive);
+            response.put("message", isActive ?
+                "Hoạt động kinh doanh đã được kích hoạt." :
+                "Hoạt động kinh doanh đã tạm ngưng.");
+            response.put("status", "success");
+
+            return ResponseEntity
+                .ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(response);
+
         } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", e.getMessage());
+
+            return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(errorResponse);
         } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", e.getMessage());
+
+            return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(errorResponse);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật trạng thái người bán: " + e.getMessage());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Lỗi khi thay đổi trạng thái kinh doanh: " + e.getMessage());
+
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(errorResponse);
         }
     }
-
-
-
-//CẬP NHẬT TRẠNG THÁI KINH DOANH
-    @PutMapping("/{sellerId}/business-status")
-    public ResponseEntity<?> updateBusinessStatus(@PathVariable Integer sellerId, @RequestParam byte status) {
-        try {
-            sellerService.updateBusinessStatus(sellerId, status);
-            return ResponseEntity.ok("Trạng thái kinh doanh của người bán đã được cập nhật thành công.");
-        } catch (EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật trạng thái kinh doanh: " + e.getMessage());
-        }
-    }
-
-
-
-
-
-
 }

@@ -1,24 +1,19 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 //90%
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateAdminRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.SuperAdminService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Admin.CreateSuperAdminRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.sql.Timestamp;
 import java.util.List;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/manager")  // Changed to remove trailing slash
@@ -50,7 +45,6 @@ public class SuperAdminController {
 
 //TẠO TÀI KHOẢN ADMIN
     @PostMapping("/admins")
-    @PreAuthorize("hasAuthority('SuperAdmin')")
     public ResponseEntity<?> createAdminAccount(@Valid @RequestBody CreateAdminRequest request) {
         try {
             // Add debug logging
@@ -71,9 +65,9 @@ public class SuperAdminController {
 
 
 
+
 //XÓA TÀI KHOẢN ADMIN
     @DeleteMapping("/admins/{adminUserId}")
-    @PreAuthorize("hasAuthority('SuperAdmin')")
     public ResponseEntity<?> deleteAdminAccount(@PathVariable Integer adminUserId) {
         try {
             // Add debug logging
