@@ -1,0 +1,28 @@
+# HTTP Requests for Testing 2FA Workflow
+
+### 1. Login to get authentication token
+POST http://localhost:8080/oldtech/auth/login
+Content-Type: application/json
+
+{
+  "email": "luonghau2909@gmail.com",
+  "password": "123456789"
+}
+
+### 2. Setup 2FA (copy the token from the previous response)
+
+POST http://localhost:8080/oldtech/auth/2fa/setup
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJsdW9uZ2hhdTI5MDlAZ21haWwuY29tIiwiaWF0IjoxNzQ5MzIwNTQyLCJleHAiOjE3NTE5MTI1NDJ9.88uOllx3kVrA_qQl3uRU0i5WH3kc478UXyE4bxzaspbj7TgWMantflJ-hW2QTC47TxH1ko_X4KMY1-cX8qJp4w
+Content-Type: application/json
+
+### 3. Verify 2FA code (Enter code from Google Authenticator app)
+POST http://localhost:8080/oldtech/auth/2fa/verify
+Content-Type: application/json
+
+{
+  "email": "luonghau2909@gmail.com",
+  "code": "123456"  // Replace with actual code from Google Authenticator
+}
+
+### 4. Check 2FA status for user
+GET http://localhost:8080/oldtech/auth/2fa/status?email=luonghau2909@gmail.com
