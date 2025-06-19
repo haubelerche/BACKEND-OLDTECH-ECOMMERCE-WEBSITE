@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 
 import lombok.*;
 
-
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
@@ -56,7 +55,6 @@ public class Product {
 
     @Builder.Default
     @Column(name = "is_visible")
-    private Boolean isVisible = true; 
-    
-}
+    private Boolean isVisible = true;
 
+}

@@ -1,6 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth;
 
-import com.example.BACKEND_OLDTECH_WEBSITE.Validation.Interface.UniquePhoneNumber;
 import com.example.BACKEND_OLDTECH_WEBSITE.Validation.Interface.AgeRestriction;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,7 +19,6 @@ import java.util.Date;
 public class OAuth2RegisterRequest {
     @NotBlank(message = "Số điện thoại không được để trống")
     @Pattern(regexp = "^0[0-9]{9}$", message = "Số điện thoại phải bắt đầu bằng số 0 và có 10 chữ số")
-    @UniquePhoneNumber(message = "Số điện thoại đã tồn tại")
     private String phoneNumber;
 
     @NotNull(message = "Ngày sinh không được để trống")

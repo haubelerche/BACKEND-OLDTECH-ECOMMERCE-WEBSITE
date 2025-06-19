@@ -115,9 +115,9 @@ public class User {
     @Column(name = "two_factor_secret")
     private String twoFactorSecret;
 
-    @Column(name = "two_factor_enabled", nullable = false)
+    @Column(name = "two_factor_enabled", nullable = true)
     @Builder.Default
-    private Boolean twoFactorEnabled = false;
+    private Boolean twoFactorEnabled = true;
 
     @Column(name = "suspension_end_time")
     private LocalDateTime suspensionEndTime;
@@ -130,6 +130,6 @@ public class User {
         return twoFactorEnabled != null && twoFactorEnabled;
     }
 
-    @Column(name= "fixed_location")
-    private String fixedLocation;
+    @Column(name= "living_location")
+    private String livingLocation;
 }

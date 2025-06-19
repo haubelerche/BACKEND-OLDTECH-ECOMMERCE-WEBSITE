@@ -1,20 +1,27 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Order;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.util.Date;
+import java.sql.Timestamp;
 
 @Data
 public class OrderResponse {
     private Integer orderId;
+    private Timestamp orderTime;
     private Integer userId;
     private Integer shippingAddressId;
-    private Date orderTime;
-    private String paymentMethod;
+    private PaymentMethodEnum paymentMethod;
     private BigDecimal totalAmount;
-    private String status;
+    private OrderStatusEnum status;
     private String notes;
-    private Date createdAt;
-    private Date updatedAt;
+    private Timestamp createdAt;
+    private Timestamp updatedAt;
+    
+    // Optional: Include user and address details for convenience
+    private String userEmail;
+    private String userFullName;
+    private String shippingAddressDetail;
 }

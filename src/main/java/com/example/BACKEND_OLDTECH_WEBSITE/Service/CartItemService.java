@@ -103,4 +103,80 @@ public class CartItemService {
         Integer cartId = resolveCartIdForUser(userId);
         cartItemRepository.deleteByCartId(cartId); 
     }
-} 
+
+    /**
+     * Remove a specific product from all users' carts
+     * This is called when a product becomes unavailable (hidden, rejected, deleted)
+     */
+    @Transactional
+    public int removeProductFromAllCarts(Integer productId) {
+        try {
+            Product product = productRepository.findById(productId)
+                    .orElseThrow(() -> new EntityNotFoundException("Sản phẩm không tồn tại với ID: " + productId));
+            
+            // Find all cart items containing this product
+            List<CartItem> cartItemsWithProduct = cartItemRepository.findByProduct(product);
+            
+            if (!cartItemsWithProduct.isEmpty()) {
+                // Delete all cart items containing this product
+                cartItemRepository.deleteAll(cartItemsWithProduct);
+                System.out.println("Đã xóa sản phẩm ID " + productId + " khỏi " + cartItemsWithProduct.size() + " giỏ hàng");
+                return cartItemsWithProduct.size();
+            }
+            
+            return 0;
+        } catch (Exception e) {
+            System.err.println("Lỗi khi xóa sản phẩm khỏi tất cả giỏ hàng: " + e.getMessage());
+            throw e;
+        }
+    }
+
+    /**
+     * Check if a product is available for purchase
+     * Returns false if product is hidden, rejected, or not approved
+     */
+    @Transactional(readOnly = true)
+    public boolean isProductAvailable(Integer productId) {
+        try {
+            Product product = productRepository.findById(productId).orElse(null);
+            if (product == null) {
+                return false;
+            }
+            
+            return Boolean.TRUE.equals(product.getIsVisible()) && 
+                   Boolean.TRUE.equals(product.getIsApproved()) &&
+                   product.getStatus() == com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum.Approved;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Validate cart items and remove any unavailable products
+     * Returns count of removed items
+     */
+    @Transactional
+    public int cleanupUnavailableProducts(Integer userId) {
+        try {
+            Integer cartId = resolveCartIdForUser(userId);
+            List<CartItem> cartItems = cartItemRepository.findByCartId(cartId);
+            
+            int removedCount = 0;
+            for (CartItem item : cartItems) {
+                if (!isProductAvailable(item.getProduct().getProductId())) {
+                    cartItemRepository.delete(item);
+                    removedCount++;
+                }
+            }
+            
+            if (removedCount > 0) {
+                System.out.println("Đã xóa " + removedCount + " sản phẩm không khả dụng khỏi giỏ hàng của người dùng " + userId);
+            }
+            
+            return removedCount;
+        } catch (Exception e) {
+            System.err.println("Lỗi khi dọn dẹp giỏ hàng: " + e.getMessage());
+            return 0;
+        }
+    }
+}

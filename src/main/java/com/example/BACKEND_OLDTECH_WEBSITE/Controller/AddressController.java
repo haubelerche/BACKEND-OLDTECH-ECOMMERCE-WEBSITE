@@ -2,8 +2,11 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Address.AddressRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Address.AddressResponse;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Address.AddressSelectionResponse;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Address;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.AddressService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -12,6 +15,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -23,10 +28,11 @@ import java.util.stream.Collectors;
 @PreAuthorize("hasAuthority('Customer')")  // Only customers can access address management
 public class AddressController {
 
-    private static final Logger logger = LoggerFactory.getLogger(AddressController.class);
+    private static final Logger logger = LoggerFactory.getLogger(AddressController.class);    @Autowired
+    private AddressService addressService;
 
     @Autowired
-    private AddressService addressService;
+    private UserService userService;
 
     /**
      * Get all addresses for the current user
@@ -54,7 +60,7 @@ public class AddressController {
     }
 
     /**
-     * Get a specific address by ID
+     * Get a specific address by userId
      */
     @GetMapping("/get/{addressId}")
     public ResponseEntity<?> getAddressById(@PathVariable Integer addressId, @RequestParam Integer userId) {
@@ -154,7 +160,34 @@ public class AddressController {
         }
     }
 
+    /**
+     * Get all addresses for the current authenticated user (for address selection)
+     * This endpoint automatically detects the current user from JWT token
+     */
+    @GetMapping("/my-addresses")
+    public ResponseEntity<?> getMyAddresses() {
+        try {
+            User currentUser = getCurrentAuthenticatedUser();
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Người dùng chưa đăng nhập hoặc token không hợp lệ");
+            }
 
+            logger.info("Getting addresses for current user: {} (ID: {})", currentUser.getEmail(), currentUser.getUserId());
+            List<Address> addresses = addressService.getAllAddressesByUserId(currentUser.getUserId());
+            
+            List<AddressResponse> response = addresses.stream()
+                    .map(this::convertToAddressResponse)
+                    .collect(Collectors.toList());
+                    
+            logger.info("Retrieved {} addresses for user: {}", addresses.size(), currentUser.getEmail());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error retrieving addresses for current user", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Lỗi khi lấy danh sách địa chỉ: " + e.getMessage());
+        }
+    }
 
 
     private AddressResponse convertToAddressResponse(Address address) {
@@ -162,14 +195,86 @@ public class AddressController {
         response.setAddressId(address.getAddressId());
         response.setUserId(address.getUserId());
         response.setCity(address.getCity());
-        response.setDistrict(address.getDistrict());
-        response.setWard(address.getWard());
+        response.setDistrict(address.getDistrict());        response.setWard(address.getWard());
         response.setStreet(address.getStreet());
         response.setDetailedAddress(address.getDetailedAddress());
         response.setAddressType(address.getAddressType());
         response.setIsDefault(address.getIsDefault());
         response.setCreatedAt(address.getCreatedAt());
         response.setUpdatedAt(address.getUpdatedAt());
+        return response;
+    }
+
+    /**
+     * Helper method to get the current authenticated user
+     */
+    private User getCurrentAuthenticatedUser() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            
+            if (authentication == null || !authentication.isAuthenticated()) {
+                logger.warn("No authentication found in security context");
+                return null;
+            }
+            
+            String email = authentication.getName();
+            if (email == null || email.trim().isEmpty()) {
+                logger.warn("No email found in authentication principal");
+                return null;
+            }
+            
+            User user = userService.findUserByEmail(email);
+            if (user == null) {
+                logger.warn("No user found with email: {}", email);
+            }
+            
+            return user;
+        } catch (Exception e) {
+            logger.error("Error getting authenticated user: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Convert Address to AddressSelectionResponse for order selection
+     */
+    private AddressSelectionResponse convertToAddressSelectionResponse(Address address) {
+        AddressSelectionResponse response = new AddressSelectionResponse();
+        response.setAddressId(address.getAddressId());
+        response.setIsDefault(address.getIsDefault());
+        response.setAddressType(address.getAddressType());
+        response.setCity(address.getCity());
+        response.setDistrict(address.getDistrict());
+        response.setWard(address.getWard());
+        response.setStreet(address.getStreet());
+        response.setDetailedAddress(address.getDetailedAddress());
+        
+        // Create formatted address for display
+        String fullAddress = String.format("%s, %s, %s, %s, %s",
+                address.getDetailedAddress() != null ? address.getDetailedAddress() : "",
+                address.getStreet() != null ? address.getStreet() : "",
+                address.getWard() != null ? address.getWard() : "",
+                address.getDistrict() != null ? address.getDistrict() : "",
+                address.getCity() != null ? address.getCity() : ""
+        ).replaceAll(", ,", ",").replaceAll("^,|,$", "");
+        
+        response.setFullAddress(fullAddress);
+        
+        // Create user-friendly selection label
+        String selectionLabel = "";
+        if (address.getAddressType() != null) {
+            selectionLabel = address.getAddressType() + " - ";
+        }
+        selectionLabel += fullAddress;
+        
+        if (Boolean.TRUE.equals(address.getIsDefault())) {
+            selectionLabel += " (Mặc định)";
+        }
+        
+        response.setSelectionLabel(selectionLabel);
+        response.setDisplayName(selectionLabel);
+        response.setCanBeUsedForOrders(true); // All addresses can be used for orders
+        
         return response;
     }
 }

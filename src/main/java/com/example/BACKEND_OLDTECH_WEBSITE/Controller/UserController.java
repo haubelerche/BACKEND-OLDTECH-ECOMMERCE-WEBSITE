@@ -5,7 +5,6 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.ChangePasswordRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Verification.VerificationRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -188,14 +187,12 @@ public class UserController {
             }
             if (updatedUser.getBackImageUrl() == null || updatedUser.getBackImageUrl().trim().isEmpty()) {
                 missingFields.put("backImageUrl", true);
-            }
-
-            // Check additional required fields
+            }            // Check additional required fields
             if (updatedUser.getRefundMomoAccount() == null || updatedUser.getRefundMomoAccount().trim().isEmpty()) {
                 missingFields.put("refundMomoAccount", true);
             }
-            if (updatedUser.getFixedLocation() == null || updatedUser.getFixedLocation().trim().isEmpty()) {
-                missingFields.put("fixedLocation", true);
+            if (updatedUser.getLivingLocation() == null || updatedUser.getLivingLocation().trim().isEmpty()) {
+                missingFields.put("livingLocation", true);
             }
 
             boolean isNowComplete = missingFields.isEmpty();

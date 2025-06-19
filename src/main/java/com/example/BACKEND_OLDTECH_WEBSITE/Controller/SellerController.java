@@ -14,6 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
@@ -24,18 +27,58 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class SellerController {
 
-    private final SellerService sellerService;
-
-    @Autowired
+    private final SellerService sellerService;    @Autowired
     public SellerController(SellerService sellerService) {
         this.sellerService = sellerService;
     }
 
+    /**
+     * Helper method to get current user ID from authentication token
+     */
+    private Integer getCurrentUserIdFromToken() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+                // Assuming the user ID is stored as a part of the username in the format "userId:username"
+                String[] userInfo = userDetails.getUsername().split(":");
+                if (userInfo.length > 0) {
+                    return Integer.parseInt(userInfo[0]);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        throw new SecurityException("Không thể xác định user từ token");
+    }
 
-    /*---DÀNH CHO ADMIN---*/
+    /**
+     * Helper method to get current seller ID from authentication token
+     */
+    private Integer getCurrentSellerIdFromToken() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
+                UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+                // Assuming the seller ID is stored as a part of the username in the format "sellerId:username"
+                String[] userInfo = userDetails.getUsername().split(":");
+                if (userInfo.length > 0) {
+                    return Integer.parseInt(userInfo[0]);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        throw new SecurityException("Không thể xác định seller từ token");
+    }
+
+
+
+
+
+/*---DÀNH CHO ADMIN---*/
 
     //XÁC THỰC NGƯỜI BÁN
-    //ok
     @PostMapping("/verify/{sellerId}")
     @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
     public ResponseEntity<?> verifySeller(@PathVariable Integer sellerId, @RequestBody SellerVerifyRequest request) {
@@ -96,9 +139,9 @@ public class SellerController {
     }
 
 
-    /*---DÀNH CHO NGƯỜI BÁN---*/
 
-    //YÊU CẦU TRỞ THÀNH NGƯỜI BÁN //ok
+
+ /*---DÀNH CHO NGƯỜI BÁN---*/    //YÊU CẦU TRỞ THÀNH NGƯỜI BÁN //ok
     @PostMapping("/apply/seller")
     public ResponseEntity<?> applyToBecomeSeller(@RequestBody SellerRegisterRequest request) {
         try {
@@ -107,10 +150,11 @@ public class SellerController {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Tài khoản Momo không được để trống");
             }
 
-            Integer userId = request.getUserId();
+            // TODO: Get userId from JWT token instead of request body
+            Integer userId = getCurrentUserIdFromToken();
             if (userId == null) {
-                System.out.println("DEBUG - UserId is null in request");
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("ID người dùng không được để trống");
+                System.out.println("DEBUG - Cannot extract userId from token");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Không thể xác định người dùng từ token");
             }
 
             // Check for policy agreement
@@ -194,11 +238,17 @@ public class SellerController {
     }
 
 
-    // ĐĂNG KÍ SẢN PHẨM BÁN  //ok
-    @PostMapping(path = "register/product/{sellerId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+
+
+
+    // ĐĂNG KÍ SẢN PHẨM BÁN  
+    @PostMapping(path = "register/product", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAuthority('Seller')")
-    public ResponseEntity<?> addProduct(@PathVariable Integer sellerId, @RequestBody ProductRequest request) {
+    public ResponseEntity<?> addProduct(@RequestBody ProductRequest request) {
         try {
+      
+            Integer sellerId = getCurrentSellerIdFromToken();
+            
             // Validate that price is provided
             if (request.getPrice() == null) {
                 return ResponseEntity
@@ -247,12 +297,12 @@ public class SellerController {
     }
 
 
-    //CẬP NHẬT THÔNG TIN SẢN PHẨM  //ok
-    @PutMapping("/update/product/{sellerId}/{productId}")
+ //CẬP NHẬT THÔNG TIN SẢN PHẨM  //ok
+    @PutMapping("/update/product/{productId}")
     @PreAuthorize("hasAuthority('Seller')")
-    public ResponseEntity<?> updateProduct(@PathVariable Integer sellerId, @PathVariable Integer productId, @RequestBody Product product) {
+    public ResponseEntity<?> updateProduct(@PathVariable Integer productId, @RequestBody Product product) {
         try {
-            Product updatedProduct = sellerService.updateProduct(sellerId, productId, product);
+            Integer sellerId = getCurrentSellerIdFromToken();            Product updatedProduct = sellerService.updateProduct(sellerId, productId, product);
             return ResponseEntity.ok(updatedProduct);
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
@@ -268,11 +318,15 @@ public class SellerController {
     }
 
 
-    //XÓA SẢN PHẨM
-    @DeleteMapping("/delete/product/{sellerId}/{productId}")
+
+//XÓA SẢN PHẨM
+    @DeleteMapping("/delete/product/{productId}")
     @PreAuthorize("hasAuthority('Seller')")
-    public ResponseEntity<?> deleteProduct(@PathVariable Integer sellerId, @PathVariable Integer productId) {
+    public ResponseEntity<?> deleteProduct(@PathVariable Integer productId) {
         try {
+            // TODO: Get sellerId from JWT token instead of path variable
+            Integer sellerId = getCurrentSellerIdFromToken();
+            
             sellerService.deleteProduct(sellerId, productId);
             return ResponseEntity.ok("Sản phẩm đã được xóa thành công.");
         } catch (EntityNotFoundException e) {
@@ -286,13 +340,21 @@ public class SellerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi xóa sản phẩm: " + e.getMessage());
         }
-    }
-
-    //LẤY DANH SÁCH SẢN PHẨM
-    @GetMapping("list/products/{sellerId}/products")
+    }   
+    
+    
+    
+    
+    
+    
+  //LẤY DANH SÁCH SẢN PHẨM
+    @GetMapping("list/products/my-products")
     @PreAuthorize("hasAuthority('Seller')")
-    public ResponseEntity<?> getProducts(@PathVariable Integer sellerId) {
+    public ResponseEntity<?> getMyProducts() {
         try {
+            // TODO: Get sellerId from JWT token instead of path variable
+            Integer sellerId = getCurrentSellerIdFromToken();
+            
             List<Product> products = sellerService.getProductsBySeller(sellerId);
             return ResponseEntity.ok(products);
         } catch (EntityNotFoundException e) {
@@ -306,14 +368,21 @@ public class SellerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lấy danh sách sản phẩm: " + e.getMessage());
         }
-    }
-
-    //TRẢ LỜI ĐÁNH GIÁ NGƯỜI MUA
+    }   
+    
+    
+    
+    
+    
+  //TRẢ LỜI ĐÁNH GIÁ NGƯỜI MUA
     //TODO: RECHECK AFTER FINISH THE REVIEW FUNCTIONALITY
-    @PostMapping("/respond_reviews/{sellerId}/{reviewId}")
+    @PostMapping("/respond_reviews/{reviewId}")
     @PreAuthorize("hasAuthority('Seller')")
-    public ResponseEntity<?> respondToReview(@PathVariable Integer sellerId, @PathVariable Integer reviewId, @RequestBody String response) {
+    public ResponseEntity<?> respondToReview(@PathVariable Integer reviewId, @RequestBody String response) {
         try {
+            // TODO: Get sellerId from JWT token instead of path variable
+            Integer sellerId = getCurrentSellerIdFromToken();
+            
             Review review = sellerService.respondToReview(sellerId, reviewId, response);
             return ResponseEntity.ok(review);
         } catch (EntityNotFoundException e) {
@@ -327,13 +396,20 @@ public class SellerController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi phản hồi đánh giá: " + e.getMessage());
         }
-    }
-
-    //TẠM NGƯNG HOẶC TIẾP TỤC KINH DOANH (CHỈ DÀNH CHO NGƯỜI BÁN)
-    @PutMapping("/toggle-business/{sellerId}")
+    }   
+    
+    
+    
+    
+    
+  //TẠM NGƯNG HOẶC TIẾP TỤC KINH DOANH (CHỈ DÀNH CHO NGƯỜI BÁN)
+    @PutMapping("/toggle-business")
     @PreAuthorize("hasAuthority('Seller')")
-    public ResponseEntity<?> toggleBusinessStatus(@PathVariable Integer sellerId, @RequestBody(required = false) Map<String, Object> request) {
+    public ResponseEntity<?> toggleBusinessStatus(@RequestBody(required = false) Map<String, Object> request) {
         try {
+            // TODO: Get sellerId from JWT token instead of path variable
+            Integer sellerId = getCurrentSellerIdFromToken();
+            
             // Check if explicit state is provided or we should toggle
             boolean isActive;
 
@@ -372,10 +448,8 @@ public class SellerController {
                     Seller seller = sellerService.getSellerById(sellerId);
                     isActive = !seller.getBusinessStatus();
                 }
-            }
-
-            // Update seller's business status using the service method
-            boolean updated = sellerService.updateBusinessStatus(sellerId, isActive ? true : false);
+            }            // Update seller's business status using the service method
+            sellerService.updateBusinessStatus(sellerId, isActive ? true : false);
 
             // Create response
             Map<String, Object> response = new HashMap<>();
@@ -417,7 +491,6 @@ public class SellerController {
             return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(errorResponse);
-        }
+                .body(errorResponse);        }
     }
 }

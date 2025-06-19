@@ -1,5 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Configuration;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.FacebookOAuth2UserService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.OAuth2AuthenticationSuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,7 +20,6 @@ import org.springframework.core.Ordered;
 import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import java.util.Arrays;
-import java.util.List;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -61,16 +62,17 @@ public class SecurityConfiguration {
                     "/oldtech/admin/**",
                     "/oldtech/verification/admin/**",
                     "/verification/admin/**", // Added this line to protect the non-prefixed endpoint
-                    "/oldtech/product/**"
+                    "/oldtech/product/**","/oldtech/api/**"
                 ).hasAnyAuthority("Admin", "SuperAdmin")
 
 
-                .requestMatchers( "/oldtech/reviews/**","/oldtech/addresses/** " )
+                .requestMatchers( "/oldtech/reviews/**","/oldtech/addresses/**","/oldtech/orders/**" )
                 .hasAnyAuthority("Customer")
 
 
 
-                .requestMatchers( "/oldtech/seller/**")
+                .requestMatchers( "/oldtech/seller/**"
+                , "/oldtech/api/**")
                     .hasAnyAuthority("Seller")
 
 
@@ -78,7 +80,7 @@ public class SecurityConfiguration {
                 .requestMatchers(
                         "/oldtech/manager/admins",
                         "/oldtech/manager/**",
-                        "/manager/**",
+                        "/manager/**","/oldtech/api/**",
                         "/oldtech/manager/admins/**"
                 ).hasAuthority("SuperAdmin")
 

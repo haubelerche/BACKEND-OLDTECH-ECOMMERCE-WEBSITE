@@ -4,13 +4,17 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 
 public enum OrderStatusEnum {
-    Pending, Processing, Shipped, Delivered, Cancelled, Returned, Completed;
-
-    public static String[] names() {
-        return Arrays.stream(values()).map(OrderStatusEnum::name).toArray(String[]::new);
-    }
+    Pending,
+    Processing,
+    Shipped,
+    Delivered,
+    Completed,
+    Cancelled,
+    Returned;
 
     public static String getValidStatusesString() {
-        return Arrays.stream(names()).collect(Collectors.joining(", "));
+        return Arrays.stream(OrderStatusEnum.values())
+            .map(Enum::name)
+            .collect(Collectors.joining(", "));
     }
 }

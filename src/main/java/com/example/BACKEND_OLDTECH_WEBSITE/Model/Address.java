@@ -2,7 +2,10 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AddressTypeEnum;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -10,13 +13,17 @@ import java.time.LocalDateTime;
 
 @Entity
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "address")
-public class Address {    @Id
+public class Address {
+      @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "address_id")
+    @Column(name = "address_id", columnDefinition = "INT UNSIGNED")
     private Integer addressId;
 
-    @Column(name="user_id", nullable = false)
+    @Column(name="user_id", nullable = false, columnDefinition = "INT UNSIGNED")
     private Integer userId;
 
     @Column(name="city", nullable = false)
@@ -32,10 +39,13 @@ public class Address {    @Id
     private String street;
 
     @Column(name="detailed_address", nullable = false)
-    private String detailedAddress;    @Enumerated(EnumType.STRING)
+    private String detailedAddress;
+    
+    @Enumerated(EnumType.STRING)
     @Column(name = "address_type")
     private AddressTypeEnum addressType;
 
+    @Builder.Default
     @Column(name="is_default", nullable = false)
     private Boolean isDefault = false;
 

@@ -11,8 +11,6 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Exception.AccountSuspendedException;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.NotificationRepository;
-import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
-import com.example.BACKEND_OLDTECH_WEBSITE.Service.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -25,7 +23,10 @@ import org.springframework.security.oauth2.core.OAuth2RefreshToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -45,6 +46,7 @@ public class OAuth2Service {
     private final JwtService jwtService;
     private final NotificationRepository notificationRepository;
     private final OAuth2AuthorizedClientService authorizedClientService;
+    private final LoginAttemptService loginAttemptService;
 
     @Transactional
     public TokenResponse processOAuth2Login(OAuth2AuthenticationToken authentication) {
@@ -90,11 +92,10 @@ public class OAuth2Service {
         if (client != null) {
             OAuth2AccessToken accessToken = client.getAccessToken();
             OAuth2RefreshToken refreshToken = client.getRefreshToken();
-            
-            if (accessToken != null) {
+              if (accessToken != null) {
                 tokenAttributes.put("access_token", accessToken.getTokenValue());
-                tokenAttributes.put("token_expires", accessToken.getExpiresAt() != null ? 
-                    accessToken.getExpiresAt().toEpochMilli() : null);
+                Instant expiresAt = accessToken.getExpiresAt();
+                tokenAttributes.put("token_expires", expiresAt != null ? expiresAt.toEpochMilli() : null);
             }
             
             if (refreshToken != null) {
@@ -119,10 +120,24 @@ public class OAuth2Service {
             enhancedAttributes,
             nameAttributeKey
         );
-        
-        // Process the OAuth2 user, which will either find an existing user or create a new one
+          // Process the OAuth2 user, which will either find an existing user or create a new one
         User user = userService.processOAuth2User(enhancedUser, providerName);
         log.info("OAuth2 user processed: {}, ID: {}", user.getEmail(), user.getUserId());
+
+        // Log successful OAuth2 login attempt
+        try {
+            String sessionId = java.util.UUID.randomUUID().toString();
+            loginAttemptService.logLoginAttempt(
+                user.getEmail(), 
+                user.getUserId(), 
+                getCurrentRequest(), 
+                true, 
+                null, 
+                sessionId + "_oauth2_" + providerName
+            );
+        } catch (Exception e) {
+            log.debug("Failed to log OAuth2 login attempt: {}", e.getMessage());
+        }
 
         // Check if account is suspended
         checkAccountStatus(user);
@@ -371,12 +386,11 @@ public class OAuth2Service {
     }
 
     private void sendWelcomeNotification(User user) {
-        Notification notification = new Notification();
-        notification.setUser(user);
+        Notification notification = new Notification();        notification.setUser(user);
         notification.setMessage("Chào mừng bạn đến với OldTech! Cảm ơn bạn đã đăng ký tài khoản.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.System);
+        notification.setNotificationType(NotificationTypeEnum.SYSTEM);
         notificationRepository.save(notification);
         
         log.info("Sent welcome notification to user ID: {}", user.getUserId());
@@ -392,23 +406,21 @@ public class OAuth2Service {
 
     private void sendProfileCompletionNotification(User user) {
         Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setMessage("Vui lòng vào phần cài đặt và cập nhật đầy đủ thông tin cá nhân của bạn để hoàn tất đăng ký tài khoản.");
+        notification.setUser(user);        notification.setMessage("Vui lòng vào phần cài đặt và cập nhật đầy đủ thông tin cá nhân của bạn để hoàn tất đăng ký tài khoản.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.System);
+        notification.setNotificationType(NotificationTypeEnum.PROFILE_INCOMPLETE);
         notificationRepository.save(notification);
         
         log.info("Sent profile completion notification to user ID: {}", user.getUserId());
     }
     
     private void sendVerificationRequiredNotification(User user) {
-        Notification notification = new Notification();
-        notification.setUser(user);
+        Notification notification = new Notification();        notification.setUser(user);
         notification.setMessage("Vui lòng gửi tất cả thông tin cần thiết để xác minh tài khoản của bạn. Điều này sẽ giúp tăng độ tin cậy khi sử dụng nền tảng của chúng tôi.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.System);
+        notification.setNotificationType(NotificationTypeEnum.ACCOUNT_VERIFICATION);
         notificationRepository.save(notification);
         
         log.info("Sent verification required notification to user ID: {}", user.getUserId());
@@ -469,12 +481,11 @@ public class OAuth2Service {
     }
 
     private void sendSellerRequestNotification(User user) {
-        Notification notification = new Notification();
-        notification.setUser(user);
+        Notification notification = new Notification();        notification.setUser(user);
         notification.setMessage("Yêu cầu xác thực tài khoản người bán của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        notification.setNotificationType(NotificationTypeEnum.ADMIN_MESSAGE);
         notificationRepository.save(notification);
         
         log.info("Sent seller verification request notification to user ID: {}", user.getUserId());
@@ -589,13 +600,25 @@ public class OAuth2Service {
                 return "Chào mừng bạn đã đăng ký thành công bằng tài khoản " + capitalizedProvider + "! " +
                        "Tài khoản của bạn đã sẵn sàng để sử dụng.";
             }
-        } else {
-            if (requiresProfileCompletion) {
+        } else {            if (requiresProfileCompletion) {
                 return "Đăng nhập thành công bằng " + capitalizedProvider + "! " +
                        "Vui lòng cập nhật thông tin cá nhân của bạn để được admin xác thực và sử dụng đầy đủ tính năng.";
             } else {
                 return "Đăng nhập thành công bằng " + capitalizedProvider + "!";
             }
+        }
+    }
+
+    /**
+     * Get current HTTP request for logging purposes
+     */
+    private HttpServletRequest getCurrentRequest() {
+        try {
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.currentRequestAttributes();
+            return attributes.getRequest();
+        } catch (Exception e) {
+            log.debug("Could not get current request: {}", e.getMessage());
+            return null;
         }
     }
 }

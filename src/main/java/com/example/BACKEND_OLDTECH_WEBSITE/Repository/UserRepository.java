@@ -20,7 +20,8 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     List<User> findByPhoneNumberContaining(String phoneNumber);
     List<User> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);
     List<User> findByAccountStatus(AccountStatusEnum accountStatus);
-    List<User> findByAccountStatusAndSuspensionEndTimeBefore(AccountStatusEnum status, LocalDateTime dateTime);
-    List<User> findByAccountStatusAndSuspensionEndTimeIsNotNull(AccountStatusEnum status);
-    List<User> findByRole(RoleEnum role); // Added method to find users by role
+    List<User> findByAccountStatusAndSuspensionEndTimeBefore(AccountStatusEnum status, LocalDateTime dateTime);    List<User> findByAccountStatusAndSuspensionEndTimeIsNotNull(AccountStatusEnum status);
+    List<User> findByRole(RoleEnum role);
+    List<User> findByRoleIn(List<RoleEnum> roles);
+
 }

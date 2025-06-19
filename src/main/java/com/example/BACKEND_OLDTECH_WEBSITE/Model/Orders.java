@@ -1,16 +1,17 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
-import jakarta.persistence.*;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
+import jakarta.persistence.*;
 import lombok.*;
+
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
-
 @Entity
 @Table(name = "orders")
-@Data
+@Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -20,7 +21,7 @@ public class Orders {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "order_id", columnDefinition = "INT UNSIGNED")
     private Integer orderId;
-    
+
     @Column(name = "order_time")
     private Timestamp orderTime;
 
@@ -39,9 +40,7 @@ public class Orders {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
-    private OrderStatusEnum status;
-
-    private String notes;
+    private OrderStatusEnum status;    private String notes;
 
     @Column(name = "created_at")
     private Timestamp createdAt;
@@ -49,12 +48,14 @@ public class Orders {
     @Column(name = "updated_at")
     private Timestamp updatedAt;
 
-    
+    @Column(name = "delivered_at")
+    private Timestamp deliveredAt; // Track when order was delivered for auto-completion
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "shipping_address_id", referencedColumnName = "address_id", insertable = false, updatable = false)
+    @JoinColumn(name = "shipping_address_id", referencedColumnName = "address_id", insertable = false, updatable = false, foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Address shippingAddress;
-    
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", referencedColumnName = "user_id", insertable = false, updatable = false)
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id", insertable = false, updatable = false, foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private User user;
 }

@@ -67,12 +67,9 @@ public class AddressService {
         address.setStreet(addressRequest.getStreet());
         address.setDetailedAddress(addressRequest.getDetailedAddress());
         address.setAddressType(addressRequest.getAddressType());
-        address.setIsDefault(addressRequest.getIsDefault());
-        address.setCreatedAt(Timestamp.from(Instant.now()).toLocalDateTime());
-        address.setUpdatedAt(Timestamp.from(Instant.now()).toLocalDateTime());
+        address.setIsDefault(addressRequest.isIsDefault());
 
-
-        if (Boolean.TRUE.equals(addressRequest.getIsDefault())) {
+        if (Boolean.TRUE.equals(addressRequest.isIsDefault())) {
             List<Address> userAddresses = addressRepository.findByUserId(userId);
             userAddresses.forEach(existingAddress -> {
                 if (Boolean.TRUE.equals(existingAddress.getIsDefault())) {
@@ -81,6 +78,9 @@ public class AddressService {
                 }
             });
         }
+
+        address.setCreatedAt(Timestamp.from(Instant.now()).toLocalDateTime());
+        address.setUpdatedAt(Timestamp.from(Instant.now()).toLocalDateTime());
 
         return addressRepository.save(address);
     }

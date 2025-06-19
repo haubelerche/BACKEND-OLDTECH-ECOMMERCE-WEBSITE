@@ -4,8 +4,6 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.LoginRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RefreshTokenRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.ForgotPasswordRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.ResetPasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Configuration.JWTProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.AuthenticationService;
@@ -22,8 +20,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.servlet.view.RedirectView;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+
 
 import java.util.HashMap;
 import java.util.Map;

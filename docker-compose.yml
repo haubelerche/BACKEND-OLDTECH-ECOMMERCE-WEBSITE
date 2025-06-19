@@ -1,0 +1,165 @@
+version: '3.8'
+
+services:
+  # Main Application  oldtech-backend:
+    build: .
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql
+      - kafka
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/secondhand_sale
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=29092004H@u      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ETL_SCHEDULER_ENABLED=true
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - oldtech-network
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: oldtech-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 29092004H@u
+      MYSQL_DATABASE: secondhand_sale
+      MYSQL_USER: oldtech_user
+      MYSQL_PASSWORD: oldtech_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - oldtech-network    command: --default-authentication-plugin=mysql_native_password
+
+  # Zookeeper (required for Kafka)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: oldtech-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+    networks:
+      - oldtech-network
+
+  # Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: oldtech-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: true
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - oldtech-network
+
+  # Kafka UI (for monitoring)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: oldtech-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: oldtech-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - oldtech-network
+
+  # Prometheus (Monitoring)
+  prometheus:
+    image: prom/prometheus:v2.40.7
+    container_name: oldtech-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - oldtech-network
+
+  # Grafana (Dashboards)
+  grafana:
+    image: grafana/grafana:9.3.2
+    container_name: oldtech-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - oldtech-network
+
+  # Elasticsearch (for logs)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: oldtech-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - oldtech-network
+
+  # Kibana (Log visualization)
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: oldtech-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - oldtech-network
+
+volumes:
+  mysql_data:
+  kafka_data:
+  zookeeper_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+
+networks:
+  oldtech-network:
+    driver: bridge

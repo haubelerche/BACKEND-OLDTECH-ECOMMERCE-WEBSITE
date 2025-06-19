@@ -1,8 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth;
-import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Validation.Interface.AgeRestriction;
 import com.example.BACKEND_OLDTECH_WEBSITE.Validation.Interface.UniqueEmail;
-import com.example.BACKEND_OLDTECH_WEBSITE.Validation.Interface.UniquePhoneNumber;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -29,7 +27,6 @@ public class RegisterRequest {
 
     @NotBlank(message = "Số điện thoại không được để trống")
     @Pattern(regexp = "^0[0-9]{9}$", message = "Số điện thoại phải bắt đầu bằng số 0 và có 10 chữ số")
-    @UniquePhoneNumber(message = "Số điện thoại đã tồn tại")
     private String phoneNumber;
 
     @NotBlank(message = "Họ không được để trống")

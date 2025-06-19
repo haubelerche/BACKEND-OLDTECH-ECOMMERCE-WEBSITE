@@ -1,15 +1,12 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.SuspendUserRequest;
-import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.UpdateUserProfileRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.ChangePasswordRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AuthProvider;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatus;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum;
-import com.example.BACKEND_OLDTECH_WEBSITE.Exception.AccountSuspendedException;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.*;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.*;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Verification.VerificationRequest;
@@ -24,10 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
 import java.sql.Timestamp;
-import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,7 +35,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import java.util.Random;
 
 @Service
@@ -135,38 +128,40 @@ public class UserService implements UserDetailsService {
                (!user.getIsVerified() && 
                 (user.getRole() == RoleEnum.Seller || user.getRole() == RoleEnum.Customer));
     }
-    
-    private void sendWelcomeNotification(User user) {
+      private void sendWelcomeNotification(User user) {
         Notification notification = new Notification();
         notification.setUser(user);
         notification.setMessage("Chào mừng bạn đến với OldTech! Cảm ơn bạn đã đăng ký tài khoản.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.System);
+        notification.setNotificationType(NotificationTypeEnum.SYSTEM);
         notificationRepository.save(notification);
         
         log.info("Sent welcome notification to user ID: {}", user.getUserId());
     }
-    
-    private void sendProfileCompletionNotification(User user) {
+      private void sendProfileCompletionNotification(User user) {
         Notification notification = new Notification();
         notification.setUser(user);
         notification.setMessage("Vui lòng vào phần cài đặt và cập nhật đầy đủ thông tin cá nhân của bạn để hoàn tất đăng ký tài khoản.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.System);
+        // Use SYSTEM instead of PROFILE_INCOMPLETE temporarily until database is updated
+        notification.setNotificationType(NotificationTypeEnum.SYSTEM);
+        notification.setTitle("Thông tin chưa đầy đủ");
         notificationRepository.save(notification);
         
         log.info("Sent profile completion notification to user ID: {}", user.getUserId());
     }
-    
-    private void sendVerificationRequiredNotification(User user) {
+
+  private void sendVerificationRequiredNotification(User user) {
         Notification notification = new Notification();
         notification.setUser(user);
         notification.setMessage("Vui lòng gửi tất cả thông tin cần thiết để xác minh tài khoản của bạn. Điều này sẽ giúp tăng độ tin cậy khi sử dụng nền tảng của chúng tôi.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.System);
+        // Use SYSTEM instead of ACCOUNT_VERIFICATION temporarily until database is updated
+        notification.setNotificationType(NotificationTypeEnum.SYSTEM);
+        notification.setTitle("Xác minh tài khoản");
         notificationRepository.save(notification);
         
         log.info("Sent verification required notification to user ID: {}", user.getUserId());
@@ -269,10 +264,8 @@ public class UserService implements UserDetailsService {
         }
 
         // If still null, try looking in other common locations
-        if (providerId == null && "facebook".equalsIgnoreCase(provider)) {
-            log.debug("Attempting to find Facebook provider ID in alternate locations");
+        if (providerId == null && "facebook".equalsIgnoreCase(provider)) {            log.debug("Attempting to find Facebook provider ID in alternate locations");
             try {
-                @SuppressWarnings("unchecked")
                 Map<String, Object> profileMap = oauth2User.getAttribute("profile");
                 if (profileMap != null && profileMap.containsKey("id")) {
                     providerId = (String) profileMap.get("id");
@@ -301,6 +294,7 @@ public class UserService implements UserDetailsService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private String extractProfilePicture(OAuth2User oauth2User, String provider) {
         if ("google".equals(provider)) {
             return oauth2User.getAttribute("picture");
@@ -314,26 +308,20 @@ public class UserService implements UserDetailsService {
                     // If it's a simple string, use it directly
                     if (pictureAttr instanceof String) {
                         return (String) pictureAttr;
-                    }
-                    // If it's a Map (Facebook's nested structure), extract the URL from it
+                    }                    // If it's a Map (Facebook's nested structure), extract the URL from it
                     else if (pictureAttr instanceof Map) {
-                        @SuppressWarnings("unchecked")
                         Map<String, Object> pictureMap = (Map<String, Object>) pictureAttr;
                         log.debug("Facebook picture object found: {}", pictureMap);
 
                         // Navigate through the nested structure
                         if (pictureMap.containsKey("data")) {
-                            @SuppressWarnings("unchecked")
                             Map<String, Object> data = (Map<String, Object>) pictureMap.get("data");
                             if (data != null && data.containsKey("url")) {
                                 return (String) data.get("url");
                             }
                         }
                     }
-                }
-
-                // Try looking for profile image in other formats or locations
-                @SuppressWarnings("unchecked")
+                }                // Try looking for profile image in other formats or locations
                 Map<String, Object> profileMap = oauth2User.getAttribute("profile");
                 if (profileMap != null && profileMap.containsKey("picture")) {
                     Object profilePicture = profileMap.get("picture");
@@ -517,11 +505,10 @@ public class UserService implements UserDetailsService {
 
         log.info("Đã gửi tài liệu xác thực cho người dùng ID: {}", userId);
         return savedDetail;
-    }
-
-    @Transactional
+    }    @Transactional
     public void fileComplaint(Integer userId, String complaintText) {
-        User user = userRepository.findById(userId)
+        // Validate user exists
+        userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with ID: " + userId + ", cannot file complaint."));
 
         Complaint newComplaint = new Complaint();
@@ -533,13 +520,13 @@ public class UserService implements UserDetailsService {
         complaintRepository.save(newComplaint);
 
         log.info("Đơn khiếu nại đã được gửi bởi người dùng ID: {}", userId);
-    }
-
-    @Transactional(readOnly = true)
+    }    @Transactional(readOnly = true)
     public List<Notification> getNotifications(Integer userId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UsernameNotFoundException("Người dùng không tồn tại với ID: " + userId + ", không thể lấy thông báo."));
-        return notificationRepository.findByUserOrderByCreatedAtDesc(user);
+        // Validate user exists
+        if (!userRepository.existsById(userId)) {
+            throw new UsernameNotFoundException("Người dùng không tồn tại với ID: " + userId + ", không thể lấy thông báo.");
+        }
+        return notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId);
     }
 
     @Transactional
@@ -567,14 +554,12 @@ public class UserService implements UserDetailsService {
     @Transactional
     public void deleteAccount(Integer userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));
-
-        log.info("Starting deletion process for user ID: {}", userId);
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy người dùng với ID: " + userId));        log.info("Starting deletion process for user ID: {}", userId);
 
         // --- Delete dependent entities FIRST ---
         try {
             // Notifications
-            List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
+            List<Notification> notifications = notificationRepository.findByRecipientIdOrderByCreatedAtDesc(userId);
             if (!notifications.isEmpty()) {
                 notificationRepository.deleteAll(notifications);
                 log.info("Deleted {} notifications for user {}", notifications.size(), userId);
@@ -665,8 +650,7 @@ public class UserService implements UserDetailsService {
             user.setAuthProviderToken(null);
             user.setAuthProviderRefreshToken(null);
             user.setAuthProviderTokenExpires(null);
-            user.setRole(RoleEnum.Customer); // Reset role
-            user.setIsVerified(false);
+            user.setRole(RoleEnum.Customer); // Reset role            user.setIsVerified(false);
             user.setUpdatedAt(Timestamp.from(Instant.now()));
 
             userRepository.save(user);
@@ -679,14 +663,17 @@ public class UserService implements UserDetailsService {
     }
 
     private void sendVerificationRequestSubmittedNotification(User user) {
-        Notification notification = new Notification();
-        notification.setUser(user);
-        notification.setMessage("Yêu cầu xác thực tài khoản của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.");
-        notification.setCreatedAt(Timestamp.from(Instant.now()));
-        notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        Notification notification = Notification.builder()
+                .recipientId(user.getUserId())
+                .senderInfo("System")
+                .notificationType(NotificationTypeEnum.ADMIN_MESSAGE)
+                .title("Yêu cầu xác thực đã gửi")
+                .content("Yêu cầu xác thực tài khoản của bạn đã được gửi. Vui lòng chờ quản trị viên phê duyệt, chúng tôi sẽ thông báo cho bạn sớm.")
+                .isRead(false)
+                .createdAt(Timestamp.from(Instant.now()))
+                .build();
+        
         notificationRepository.save(notification);
-
         log.info("Sent verification request submitted notification to user ID: {}", user.getUserId());
     }
 
@@ -741,6 +728,19 @@ public class UserService implements UserDetailsService {
         log.info("Finding user by email: {}", email);
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy người dùng với email: " + email));
+    }
+
+    /**
+     * Find a user by their ID
+     * @param userId The user ID to look up
+     * @return The User if found, or null if not found
+     */
+    @Transactional(readOnly = true)
+    public User findUserById(Integer userId) {
+        if (userId == null) {
+            return null;
+        }
+        return userRepository.findById(userId).orElse(null);
     }
 
 
@@ -853,7 +853,7 @@ public class UserService implements UserDetailsService {
         notification.setMessage("Hồ sơ của bạn đã được gửi tới admin để xác thực. Bạn sẽ nhận được thông báo khi quá trình xác thực hoàn tất.");
         notification.setCreatedAt(Timestamp.from(Instant.now()));
         notification.setRead(false);
-        notification.setNotificationType(NotificationTypeEnum.AdminMessage);
+        notification.setNotificationType(NotificationTypeEnum.ADMIN_MESSAGE);
         notificationRepository.save(notification);
 
         // Create verification details record in the database
@@ -890,7 +890,7 @@ public class UserService implements UserDetailsService {
                                    requestingUser.getLastName() + " (ID: " + requestingUser.getUserId() + ")");
             notification.setCreatedAt(Timestamp.from(Instant.now()));
             notification.setRead(false);
-            notification.setNotificationType(NotificationTypeEnum.System);
+            notification.setNotificationType(NotificationTypeEnum.ADMIN_ANNOUNCEMENT);
             notificationRepository.save(notification);
 
             log.info("Sent verification request notification to admin ID: {}", admin.getUserId());

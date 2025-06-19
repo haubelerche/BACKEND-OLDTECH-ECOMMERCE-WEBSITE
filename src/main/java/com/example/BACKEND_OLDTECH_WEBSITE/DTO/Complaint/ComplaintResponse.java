@@ -1,17 +1,20 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.DTO.Complaint;
 
-import jakarta.validation.constraints.NotBlank;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatus;
 import lombok.Data;
+
+import java.sql.Timestamp;
 
 @Data
 public class ComplaintResponse {
-    private Integer complaintId;
-    private Integer complainantId;
-    private Integer respondentId;
+    private Long complaintId;
     private Integer orderId;
-    private String reason;
-    @NotBlank(message = "Cập nhật trạng thái không được để trống")
-    private String status;
-    @NotBlank(message = "Ghi chú giải quyết không được để trống")
+    private Integer respondentId;
+    private String respondentName;
+    private Timestamp createdAt;
+    private Timestamp updatedAt;
     private String adminResponse;
+    private String reason;
+    private ComplaintStatus status;
+    private String statusDisplay;
 }

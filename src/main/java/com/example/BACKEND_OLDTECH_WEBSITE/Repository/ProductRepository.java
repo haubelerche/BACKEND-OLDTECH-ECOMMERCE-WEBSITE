@@ -2,7 +2,7 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Repository;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;   
+import org.springframework.stereotype.Repository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
 
 import java.util.List;

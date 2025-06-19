@@ -1,6 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
-
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -10,26 +9,22 @@ import java.util.Map;
 
 import jakarta.persistence.EntityNotFoundException;
 
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.RoleEnum;
 
-
-import com.example.BACKEND_OLDTECH_WEBSITE.Model.Category; 
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Category;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
-
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.CategoryRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderDetailRepository;
@@ -51,7 +46,9 @@ public class SellerService {
     private final CategoryRepository categoryRepository;
 
     @Autowired
-    public SellerService(UserRepository userRepository, ProductRepository productRepository, ReviewRepository reviewRepository, OrderDetailRepository orderDetailRepository, OrderRepository orderRepository, SellerRepository sellerRepository, CategoryRepository categoryRepository) {
+    public SellerService(UserRepository userRepository, ProductRepository productRepository, ReviewRepository reviewRepository,
+            OrderDetailRepository orderDetailRepository, OrderRepository orderRepository,
+            SellerRepository sellerRepository, CategoryRepository categoryRepository) {
         this.userRepository = userRepository;
         this.productRepository = productRepository;
         this.reviewRepository = reviewRepository;
@@ -96,10 +93,8 @@ public class SellerService {
         // Validate that seller is approved and can perform seller operations
         validateApprovedSeller(sellerId);
 
-
         Product existingProduct = productRepository.findById(productId)
             .orElseThrow(() -> new EntityNotFoundException("Sản phẩm không tồn tại với ID: " + productId));
-
 
         if (!existingProduct.getSellerId().equals(sellerId)) {
             throw new SecurityException("Sản phẩm với ID: " + productId + " không thuộc về người bán ID: " + sellerId + ". Cập nhật bị cấm.");

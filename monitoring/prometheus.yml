@@ -1,0 +1,30 @@
+# Monitoring Configuration for Prometheus
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # OldTech Backend Application
+  - job_name: 'oldtech-backend'
+    static_configs:
+      - targets: ['oldtech-backend:8080']
+    metrics_path: '/actuator/prometheus'
+    scrape_interval: 5s
+
+  # Kafka Metrics
+  - job_name: 'kafka'    static_configs:
+      - targets: ['kafka:9092']
+
+  # MySQL Metrics
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['mysql:3306']
+
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

@@ -1,6 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatus;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintTypeEnum;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,27 +20,20 @@ public class Complaint {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "complaint_id")
-    private Long id;
+    private Long complaintId;
 
-    @Column(name = "complainant_id")
-    private Integer complainantId;
-
-    @Column(name = "respondent_id")
-    private Integer respondentId;
-
-    @Column(name = "order_id")
+    @Column(name = "order_id", columnDefinition = "INT UNSIGNED")
     private Integer orderId;
 
-    @Column(name = "reason", length = 255)
-    private String reason;
+    @Column(name = "complainant_id", columnDefinition = "INT UNSIGNED")
+    private Integer complainantId;
 
+    @Column(name = "respondent_id", columnDefinition = "INT UNSIGNED")
+    private Integer respondentId;
+
+    @Column(name = "complaint_type")
     @Enumerated(EnumType.STRING)
-    @Column(name = "status")
-    @Builder.Default
-    private ComplaintStatus status = ComplaintStatus.Pending;
-
-    @Column(name = "admin_response", length = 255)
-    private String adminResponse;
+    private ComplaintTypeEnum complaintType;
 
     @Column(name = "created_at")
     private Timestamp createdAt;
@@ -47,7 +41,19 @@ public class Complaint {
     @Column(name = "updated_at")
     private Timestamp updatedAt;
 
+    @Column(name = "admin_response", columnDefinition = "TEXT")
+    private String adminResponse;
+
+    @Column(name = "reason", columnDefinition = "TEXT")
+    private String reason;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    @Builder.Default
+    private ComplaintStatus status = ComplaintStatus.Pending;
+
+    // Relationships
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "complainant_id", insertable = false, updatable = false)
-    private User complainant;
+    @JoinColumn(name = "respondent_id", referencedColumnName = "user_id", insertable = false, updatable = false, foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    private User respondent;
 }

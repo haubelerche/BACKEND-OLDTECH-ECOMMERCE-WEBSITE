@@ -40,4 +40,3 @@ public class UniquePhoneNumberValidator implements ConstraintValidator<UniquePho
         }
     }
 }
-

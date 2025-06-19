@@ -1,8 +1,7 @@
-package com.example.BACKEND_OLDTECH_WEBSITE.Model;
+ package com.example.BACKEND_OLDTECH_WEBSITE.Model;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import jakarta.persistence.*;
-
 import lombok.*;
 
 import java.sql.Timestamp;
@@ -11,29 +10,35 @@ import java.sql.Timestamp;
 @Table(name = "seller")
 @Getter
 @Setter
-@Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Seller {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "seller_id")
+    @Column(name = "seller_id", columnDefinition = "INT UNSIGNED", nullable = false)
     private Integer sellerId;
+
+    @Column(name = "user_id", columnDefinition = "INT UNSIGNED")
+    private Integer userId;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    private User user;
+
+    @Column(name = "shop_name")
+    private String shopName;
+
+    @Column(name = "description")
+    private String description;
 
     @Column(name = "is_approved")
     private Boolean isApproved;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "account_status")
-    private AccountStatusEnum accountStatus;
-
-    @Column(name = "momo_account", length = 255)
-    private String momoAccount;
-
-    @Column(name = "approved_at")
-    private Timestamp approvedAt;
+    @Column(name = "status")
+    private AccountStatusEnum status;
 
     @Column(name = "created_at")
     private Timestamp createdAt;
@@ -41,7 +46,23 @@ public class Seller {
     @Column(name = "updated_at")
     private Timestamp updatedAt;
 
-    @Builder.Default
+    @Column(name = "rating")
+    private Double rating;
+
+    @Column(name = "business_certificate_url")
+    private String businessCertificateUrl;    @Column(name = "approved_at")
+    private Timestamp approvedAt;
+
+    @Column(name = "rejection_reason")
+    private String rejectionReason;
+
+    @Column(name = "momo_account")
+    private String momoAccount;
+
     @Column(name = "business_status")
-    private Boolean businessStatus = true;
+    private Boolean businessStatus;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "account_status")
+    private AccountStatusEnum accountStatus;
 }
