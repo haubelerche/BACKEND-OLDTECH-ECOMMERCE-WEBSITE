@@ -39,24 +39,30 @@ public class CartItemService {
         this.cartItemRepository = cartItemRepository;
         this.productRepository = productRepository;
         this.userRepository = userRepository;
-    }
-
-    @Transactional
+    }    @Transactional
     public void addItem(Integer userId, Integer productId) {
-
+        // Validate user exists
         Integer cartId = resolveCartIdForUser(userId);
 
+        // Validate product exists and is available
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new EntityNotFoundException("Sản phẩm không tồn tại với ID: " + productId));
 
+        // Check if product is available for purchase
+        if (!isProductAvailable(productId)) {
+            throw new IllegalArgumentException("Sản phẩm này hiện không khả dụng hoặc đã bị ẩn");
+        }
+
+        // Check if item already exists in cart
+        if (cartItemRepository.findByCartIdAndProduct(cartId, product).isPresent()) {
+            throw new IllegalArgumentException("Sản phẩm đã có trong giỏ hàng");
+        }
 
         CartItem newItem = new CartItem();
         newItem.setCartId(cartId);
         newItem.setProduct(product);
-
         newItem.setAddedAt(LocalDateTime.now());
         cartItemRepository.save(newItem);
-
     }
 
     @Transactional(readOnly = true)
