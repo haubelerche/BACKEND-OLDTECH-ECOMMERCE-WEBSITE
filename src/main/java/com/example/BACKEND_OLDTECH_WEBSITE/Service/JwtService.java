@@ -28,7 +28,9 @@ public class JwtService {
     private long refreshExpiration;
 
     public String generateToken(User user) {
-        return generateToken(new HashMap<>(), user);
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("role", user.getRole().toString());
+        return generateToken(claims, user);
     }
 
     public String generateToken(Map<String, Object> extraClaims, User user) {
@@ -42,7 +44,12 @@ public class JwtService {
     }
 
     public String generateRefreshToken(UserDetails userDetails) {
-        return buildToken(new HashMap<>(), userDetails, refreshExpiration);
+        Map<String, Object> extraClaims = new HashMap<>();
+        // Add role to refresh token if possible
+        if (userDetails instanceof User) {
+            extraClaims.put("role", ((User) userDetails).getRole().toString());
+        }
+        return buildToken(extraClaims, userDetails, refreshExpiration);
     }
 
     private String buildToken(Map<String, Object> extraClaims, UserDetails userDetails, long expiration) {
@@ -62,6 +69,10 @@ public class JwtService {
 
     public String extractUsername(String token) {
         return extractClaim(token, Claims::getSubject);
+    }
+
+    public String extractRole(String token) {
+        return extractClaim(token, claims -> claims.get("role", String.class));
     }
 
     private boolean isTokenExpired(String token) {

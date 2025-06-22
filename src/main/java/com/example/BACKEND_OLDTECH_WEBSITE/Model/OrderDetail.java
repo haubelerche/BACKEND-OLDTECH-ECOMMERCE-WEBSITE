@@ -11,9 +11,7 @@ import java.math.BigDecimal;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class OrderDetail {
-
-    @Id
+public class OrderDetail {    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "order_detail_id", columnDefinition = "INT UNSIGNED", nullable = false)
     private Integer orderDetailId;
@@ -26,5 +24,8 @@ public class OrderDetail {
     @JoinColumn(name = "product_id", nullable = false, columnDefinition = "INT UNSIGNED")
     private Product product;
 
+
+
+    @Column(name = "price_at_purchase")
     private BigDecimal priceAtPurchase;
 }

@@ -23,7 +23,8 @@ import java.util.Map;
 import java.util.HashMap;
 
 @Service
-public class ComplaintService {
+public class
+ComplaintService {
     private static final Logger logger = LoggerFactory.getLogger(ComplaintService.class);
     
     @Autowired

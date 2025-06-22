@@ -47,8 +47,8 @@ public class SellerService {
 
     @Autowired
     public SellerService(UserRepository userRepository, ProductRepository productRepository, ReviewRepository reviewRepository,
-            OrderDetailRepository orderDetailRepository, OrderRepository orderRepository,
-            SellerRepository sellerRepository, CategoryRepository categoryRepository) {
+                         OrderDetailRepository orderDetailRepository, OrderRepository orderRepository,
+                         SellerRepository sellerRepository, CategoryRepository categoryRepository) {
         this.userRepository = userRepository;
         this.productRepository = productRepository;
         this.reviewRepository = reviewRepository;

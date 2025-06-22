@@ -24,9 +24,6 @@ public class Product {
     @Column(name = "seller_id", columnDefinition = "INT UNSIGNED")
     private Integer sellerId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "seller_id", insertable = false, updatable = false)
-    private Seller seller;
 
     @Column(name = "category_id", columnDefinition = "BIGINT UNSIGNED")
     private Long categoryId;

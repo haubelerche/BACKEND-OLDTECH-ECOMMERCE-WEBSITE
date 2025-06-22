@@ -57,30 +57,40 @@ public class SecurityConfiguration {
                 ).permitAll()
 
 
-                .requestMatchers(
-                    "/admin/**",
-                    "/oldtech/admin/**",
-                    "/oldtech/verification/admin/**",
-                    "/verification/admin/**", // Added this line to protect the non-prefixed endpoint
-                    "/oldtech/product/**","/oldtech/api/**"
-                ).hasAnyAuthority("Admin", "SuperAdmin")
-
+                    .requestMatchers(
+                            "/admin/**",
+                            "/oldtech/admin/**",
+                            "/oldtech/verification/admin/**",
+                            "/verification/admin/**",
+                            "/oldtech/product/**",
+                            "/oldtech/api/**",
+                            "/oldtech/admin-alerts/**",  // Removed extra quotation mark
+                            "/oldtech/admin-dashboard",
+                            "/oldtech/admin-dashboard-etl/**",
+                            "/oldtech/etl",
+                            "/oldtech/etl/seller-dashboard/**",
+                            "/oldtech/etl/seller-dashboard-etl/**"
+                    ).hasAnyAuthority("Admin", "SuperAdmin")
 
                 .requestMatchers( "/oldtech/reviews/**","/oldtech/addresses/**","/oldtech/orders/**" )
                 .hasAnyAuthority("Customer")
 
 
 
-                .requestMatchers( "/oldtech/seller/**"
-                , "/oldtech/api/**")
-                    .hasAnyAuthority("Seller")
-
+                    .requestMatchers(
+                            "/oldtech/seller/**",
+                            "/oldtech/api/**",
+                            "/oldtech/api/seller/dashboard",  // Added leading slash
+                            "/oldtech/etl",
+                            "/oldtech/etl/seller-dashboard/**",
+                            "/oldtech/etl/seller-dashboard-etl/**"
+                    ).hasAnyAuthority("Seller")
 
 
                 .requestMatchers(
                         "/oldtech/manager/admins",
                         "/oldtech/manager/**",
-                        "/manager/**","/oldtech/api/**",
+                        "/manager/**","/oldtech/**",
                         "/oldtech/manager/admins/**"
                 ).hasAuthority("SuperAdmin")
 

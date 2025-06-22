@@ -1,6 +1,5 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
-//90%
-//TODO:ASK Long ABOUT DOMAIN
+
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.LoginRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RefreshTokenRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Auth.RegisterRequest;

@@ -6,6 +6,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Model.ProductImage;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductImageRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.SellerRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
@@ -27,18 +28,19 @@ public class ProductImageService {
 
     private final ProductImageRepository productImageRepository;
     private final ProductRepository productRepository;
+    private final SellerRepository sellerRepository;
     private static final Logger log = LoggerFactory.getLogger(ProductImageService.class);
     // Change to absolute path and ensure it's properly accessed
     private final String uploadDir = System.getProperty("user.dir") + "/uploads/products/";
     private final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
     private final int MIN_IMAGES_REQUIRED = 1; // Reduced from 5 to make testing easier
-    private final int MAX_IMAGES_ALLOWED = 10;
-
-    @Autowired
+    private final int MAX_IMAGES_ALLOWED = 10;    @Autowired
     public ProductImageService(ProductImageRepository productImageRepository, 
-                             ProductRepository productRepository) {
+                             ProductRepository productRepository,
+                             SellerRepository sellerRepository) {
         this.productImageRepository = productImageRepository;
         this.productRepository = productRepository;
+        this.sellerRepository = sellerRepository;
     }
 
     @Transactional
@@ -50,11 +52,13 @@ public class ProductImageService {
         
         // Set the first image as primary if no primary image exists
         boolean hasPrimary = productImageRepository.findByProductAndIsPrimaryTrue(product).isPresent();
-        
-        for (int i = 0; i < imageUrls.size(); i++) {
+          for (int i = 0; i < imageUrls.size(); i++) {
             ProductImage image = new ProductImage();
             image.setProduct(product);
-            image.setSeller(product.getSeller()); // Set seller from product
+            // Fetch seller entity using sellerId from product
+            Seller seller = sellerRepository.findById(product.getSellerId())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người bán với ID: " + product.getSellerId()));
+            image.setSeller(seller);
             image.setImageUrl(imageUrls.get(i));
             image.setDisplayOrder(i + 1);
             
@@ -190,11 +194,12 @@ public class ProductImageService {
             // Save the file to disk
             java.io.File dest = new java.io.File(uploadDir + filename);
             file.transferTo(dest);
-            log.info("File saved to disk: {}", dest.getAbsolutePath());
-
-            ProductImage productImage = new ProductImage();
+            log.info("File saved to disk: {}", dest.getAbsolutePath());            ProductImage productImage = new ProductImage();
             productImage.setProduct(product);
-            productImage.setSeller(product.getSeller());
+            // Fetch seller entity using sellerId from product
+            Seller seller = sellerRepository.findById(product.getSellerId())
+                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy người bán với ID: " + product.getSellerId()));
+            productImage.setSeller(seller);
             productImage.setImageUrl(fileUrl);
             productImage.setIsPrimary(i == thumbnailIndex);
             productImage.setDisplayOrder(i + 1);

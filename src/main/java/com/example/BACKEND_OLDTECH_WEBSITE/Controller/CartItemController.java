@@ -9,6 +9,10 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.CartItemService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.OrderService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Configuration.MomoPayment;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Payment.MomoCreatePaymentResponseModel;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderDetailRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,18 +36,22 @@ import java.util.Map;
 @RequestMapping("/cart")
 public class CartItemController {
     private static final Logger logger = LoggerFactory.getLogger(CartItemController.class);
-
     @Autowired
     private CartItemService cartItemService;
-    
+
     @Autowired
     private OrderService orderService;
-    
+
     @Autowired
-    private UserService userService;    // CUSTOMER - Thêm sản phẩm vào giỏ hàng
+    private UserService userService;
+    @Autowired
+    private MomoPayment momoPayment;
+
+    @Autowired
+    private OrderDetailRepository orderDetailRepository;// CUSTOMER - Thêm sản phẩm vào giỏ hàng
     @PostMapping("/addItem/{userId}")
-    @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> addItem(@PathVariable Integer userId, 
+    @PreAuthorize("hasAuthority('Customer') and hasAuthority('Admin')")
+    public ResponseEntity<?> addItem(@PathVariable Integer userId,
                                      @RequestParam Integer productId) {
         try {
             // Validate product availability before adding to cart
@@ -184,9 +192,7 @@ public class CartItemController {
                 response.put("message", "Giỏ hàng trống, không thể thanh toán");
                 response.put("success", false);
                 return ResponseEntity.badRequest().body(response);
-            }
-
-            // Tính tổng tiền
+            }            // Tính tổng tiền
             BigDecimal totalAmount = cartItemService.getTotalPriceByUserId(userId);
 
             // Tạo đơn hàng
@@ -196,10 +202,12 @@ public class CartItemController {
             orderRequest.setShippingAddressId(shippingAddressId);
             orderRequest.setNotes(notes);
 
-            Orders newOrder = createOrderFromCart(userId, orderRequest);
+            Orders newOrder = createOrderFromCart(userId, orderRequest, cartItems);
 
             // Xử lý theo phương thức thanh toán
             if (paymentMethod == PaymentMethodEnum.Momo) {
+                // Đối với MoMo, xóa items khỏi cart sau khi tạo order thành công  
+                removeItemsFromCart(userId, cartItems);
                 return handleMomoPayment(newOrder, cartItems);
             } else if (paymentMethod == PaymentMethodEnum.CashOnDelivery) {
                 return handleCashOnDeliveryPayment(newOrder, cartItems);
@@ -245,19 +253,19 @@ public class CartItemController {
                 response.put("message", "Không tìm thấy sản phẩm được chọn trong giỏ hàng");
                 response.put("success", false);
                 return ResponseEntity.badRequest().body(response);
-            }
-
-            // Tạo đơn hàng
+            }            // Tạo đơn hàng
             CreateOrderRequest orderRequest = new CreateOrderRequest();
             orderRequest.setPaymentMethod(paymentMethod);
             orderRequest.setTotalAmount(totalAmount);
             orderRequest.setShippingAddressId(shippingAddressId);
             orderRequest.setNotes(notes);
 
-            Orders newOrder = createOrderFromCart(userId, orderRequest);
+            Orders newOrder = createOrderFromCart(userId, orderRequest, selectedItems);
 
             // Xử lý theo phương thức thanh toán
             if (paymentMethod == PaymentMethodEnum.Momo) {
+                // Đối với MoMo, xóa items khỏi cart sau khi tạo order thành công
+                removeItemsFromCart(userId, selectedItems);
                 return handleMomoPayment(newOrder, selectedItems);
             } else if (paymentMethod == PaymentMethodEnum.CashOnDelivery) {
                 return handleCashOnDeliveryPayment(newOrder, selectedItems);
@@ -268,31 +276,46 @@ public class CartItemController {
         } catch (Exception e) {
             return handleException("Lỗi khi thanh toán sản phẩm được chọn", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
-
-    // Xử lý thanh toán Momo
+    }    // Xử lý thanh toán Momo
     private ResponseEntity<?> handleMomoPayment(Orders order, List<CartItem> items) {
         try {
-            // Tạo URL thanh toán Momo (giả lập)
-            String momoPaymentUrl = generateMomoPaymentUrl(order);
+            // Tạo payment request với MoMo API thực tế
+            MomoCreatePaymentResponseModel momoResponse = momoPayment.createPaymentRequest(
+                order.getOrderId().toString(),
+                order.getTotalAmount().longValue(),
+                "Thanh toán đơn hàng #" + order.getOrderId()
+            );
             
             Map<String, Object> response = new HashMap<>();
-            response.put("message", "Đang chuyển hướng đến cổng thanh toán MoMo");
-            response.put("success", true);
-            response.put("paymentMethod", "Momo");
-            response.put("orderId", order.getOrderId());
-            response.put("totalAmount", order.getTotalAmount());
-            response.put("momoPaymentUrl", momoPaymentUrl);            response.put("items", items.stream().map(item -> {
-                Map<String, Object> itemMap = new HashMap<>();
-                itemMap.put("productId", item.getProduct().getProductId());
-                itemMap.put("productName", item.getProduct().getName());
-                itemMap.put("price", item.getProduct().getPrice());
-                return itemMap;
-            }).toList());
             
-            logger.info("Đơn hàng {} đã được tạo và chuyển hướng đến thanh toán MoMo", order.getOrderId());
+            if (momoResponse.getErrorCode() == 0) {
+                response.put("message", "Đang chuyển hướng đến cổng thanh toán MoMo");
+                response.put("success", true);
+                response.put("paymentMethod", "Momo");
+                response.put("orderId", order.getOrderId());
+                response.put("totalAmount", order.getTotalAmount());
+                response.put("momoPaymentUrl", momoResponse.getPayUrl());
+                response.put("qrCodeUrl", momoResponse.getQrCodeUrl());
+                response.put("deeplink", momoResponse.getDeeplink());
+                
+                response.put("items", items.stream().map(item -> {
+                    Map<String, Object> itemMap = new HashMap<>();
+                    itemMap.put("productId", item.getProduct().getProductId());
+                    itemMap.put("productName", item.getProduct().getName());
+                    itemMap.put("price", item.getProduct().getPrice());
+                    return itemMap;
+                }).toList());
+                
+                logger.info("Đơn hàng {} đã được tạo và chuyển hướng đến thanh toán MoMo", order.getOrderId());
+                
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("message", "Lỗi khi tạo yêu cầu thanh toán MoMo: " + momoResponse.getMessage());
+                response.put("success", false);
+                response.put("errorCode", momoResponse.getErrorCode());
+                return ResponseEntity.badRequest().body(response);
+            }
             
-            return ResponseEntity.ok(response);
         } catch (Exception e) {
             return handleException("Lỗi khi xử lý thanh toán MoMo", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
@@ -321,38 +344,102 @@ public class CartItemController {
         } catch (Exception e) {
             return handleException("Lỗi khi xử lý thanh toán COD", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
-
-    // Xử lý sau khi thanh toán MoMo thành công
-    @PostMapping("/momo/success/{orderId}")
-    @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> handleMomoPaymentSuccess(@PathVariable Integer orderId) {
+    }    // Xử lý sau khi thanh toán MoMo thành công/thất bại (callback từ MoMo)
+    @PostMapping("/momo/callback")
+    public ResponseEntity<?> handleMomoCallback(@RequestParam Map<String, String> response) {
         try {
-            Orders order = orderService.getOrderById(orderId);
+            logger.info("Received MoMo callback: {}", response);
             
-            // Tạo hóa đơn sau khi thanh toán thành công
-            List<CartItem> items = new ArrayList<>(); // Cần implement logic để lấy items từ order
-            Map<String, Object> invoice = generateInvoice(order, items);
+            // Xử lý response từ MoMo
+            boolean isValidResponse = momoPayment.verifyPaymentResponse(response);
             
-            // Xóa các sản phẩm đã đặt hàng khỏi giỏ hàng
-            removeItemsFromCart(order.getUserId(), items);
+            if (!isValidResponse) {
+                logger.error("Invalid MoMo callback signature");
+                return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Invalid callback signature",
+                    "success", false
+                ));
+            }
             
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Thanh toán MoMo thành công");
-            response.put("success", true);
-            response.put("orderId", orderId);
-            response.put("invoice", invoice);
+            String orderId = response.get("orderId");
+            String resultCode = response.get("resultCode");
             
-            logger.info("Thanh toán MoMo thành công cho đơn hàng {}", orderId);
+            if ("0".equals(resultCode)) {
+                // Thanh toán thành công
+                Orders order = orderService.getOrderById(Integer.parseInt(orderId));
+                
+                // Cập nhật trạng thái đơn hàng
+                order.setStatus(OrderStatusEnum.Processing);
+                order.setUpdatedAt(Timestamp.from(Instant.now()));
+                orderService.createOrder(order); // Save updated order
+                  // Xóa sản phẩm khỏi giỏ hàng
+                // Note: Trong trường hợp MoMo callback, chúng ta cần xóa items dựa trên orderId
+                // Vì cart items đã được processed khi tạo order, ta chỉ cần log
+                logger.info("Order {} payment confirmed, cart items were already processed during order creation", orderId);
+                
+                logger.info("MoMo payment successful for order {}", orderId);
+                
+                return ResponseEntity.ok(Map.of(
+                    "message", "Payment successful",
+                    "success", true,
+                    "orderId", orderId
+                ));
+            } else {
+                // Thanh toán thất bại
+                logger.warn("MoMo payment failed for order {} with result code: {}", orderId, resultCode);
+                
+                return ResponseEntity.ok(Map.of(
+                    "message", "Payment failed",
+                    "success", false,
+                    "orderId", orderId,
+                    "resultCode", resultCode
+                ));
+            }
             
-            return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return handleException("Lỗi khi xử lý thanh toán MoMo thành công", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            logger.error("Error processing MoMo callback", e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "message", "Error processing callback",
+                "success", false
+            ));
         }
     }
 
-    // Tạo đơn hàng từ giỏ hàng
-    private Orders createOrderFromCart(Integer userId, CreateOrderRequest orderRequest) {
+    // Endpoint xử lý return URL từ MoMo (cho frontend)
+    @GetMapping("/momo/return")
+    public ResponseEntity<?> handleMomoReturn(@RequestParam Map<String, String> response) {
+        try {
+            logger.info("Received MoMo return: {}", response);
+            
+            String orderId = response.get("orderId");
+            String resultCode = response.get("resultCode");
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("orderId", orderId);
+            result.put("resultCode", resultCode);
+            
+            if ("0".equals(resultCode)) {
+                result.put("message", "Thanh toán thành công");
+                result.put("success", true);
+                result.put("status", "success");
+            } else {
+                result.put("message", "Thanh toán thất bại");
+                result.put("success", false);
+                result.put("status", "failed");
+            }
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            logger.error("Error processing MoMo return", e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "message", "Lỗi xử lý kết quả thanh toán",
+                "success", false,
+                "status", "error"
+            ));
+        }
+    }    // Tạo đơn hàng từ giỏ hàng
+    private Orders createOrderFromCart(Integer userId, CreateOrderRequest orderRequest, List<CartItem> items) {
         Orders order = new Orders();
         order.setUserId(userId);
         order.setPaymentMethod(orderRequest.getPaymentMethod());
@@ -364,17 +451,13 @@ public class CartItemController {
         order.setCreatedAt(Timestamp.from(Instant.now()));
         order.setUpdatedAt(Timestamp.from(Instant.now()));
 
-        return orderService.createOrder(order);
-    }
-
-    // Tạo URL thanh toán MoMo (giả lập)
-    private String generateMomoPaymentUrl(Orders order) {
-        // Trong thực tế, sẽ tích hợp với MoMo API
-        return String.format("https://test-payment.momo.vn/pay?orderId=%d&amount=%s&returnUrl=http://localhost:8080/cart/momo/success/%d",
-                order.getOrderId(), order.getTotalAmount().toString(), order.getOrderId());
-    }
-
-    // Tạo hóa đơn
+        Orders savedOrder = orderService.createOrder(order);
+        
+        // Tạo Order Details từ Cart Items
+        createOrderDetails(savedOrder, items);
+        
+        return savedOrder;
+    }// Tạo hóa đơn
     private Map<String, Object> generateInvoice(Orders order, List<CartItem> items) {
         Map<String, Object> invoice = new HashMap<>();
         invoice.put("invoiceId", "INV-" + order.getOrderId() + "-" + System.currentTimeMillis());
@@ -387,7 +470,7 @@ public class CartItemController {
             itemMap.put("productId", item.getProduct().getProductId());
             itemMap.put("productName", item.getProduct().getName());
             itemMap.put("price", item.getProduct().getPrice());
-            itemMap.put("quantity", 1); // Theo logic của web, mỗi mặt hàng chỉ có 1 chiếc
+            itemMap.put("quantity", 1); 
             return itemMap;
         }).toList());
         invoice.put("shippingAddressId", order.getShippingAddressId());
@@ -395,6 +478,19 @@ public class CartItemController {
         invoice.put("generatedAt", Timestamp.from(Instant.now()));
         
         return invoice;
+    }
+
+    // Tạo Order Details từ Cart Items
+    private void createOrderDetails(Orders order, List<CartItem> items) {
+        for (CartItem item : items) {
+            OrderDetail orderDetail = OrderDetail.builder()
+                .order(order)
+                .product(item.getProduct())
+                .priceAtPurchase(item.getProduct().getPrice())
+                .build();
+            
+            orderDetailRepository.save(orderDetail);
+        }
     }
 
     // Xóa các sản phẩm đã đặt hàng khỏi giỏ hàng
@@ -442,8 +538,7 @@ public class CartItemController {
             Map<String, Object> response = new HashMap<>();
             response.put("message", removedCount > 0 ? 
                 "Đã xóa " + removedCount + " sản phẩm không khả dụng khỏi giỏ hàng" : 
-                "Không có sản phẩm nào cần xóa");
-            response.put("success", true);
+                "Không có sản phẩm nào cần xóa");            response.put("success", true);
             response.put("removedCount", removedCount);
             response.put("userId", userId);
             
