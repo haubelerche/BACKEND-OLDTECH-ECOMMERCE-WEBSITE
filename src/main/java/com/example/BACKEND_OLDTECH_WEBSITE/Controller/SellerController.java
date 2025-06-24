@@ -398,7 +398,7 @@ public class SellerController {
     @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> respondToReview(@PathVariable Integer reviewId, @RequestBody String response) {
         try {
-            // TODO: Get sellerId from JWT token instead of path variable
+
             Integer sellerId = getCurrentSellerIdFromToken();
             
             Review review = sellerService.respondToReview(sellerId, reviewId, response);
@@ -519,7 +519,9 @@ public class SellerController {
     public ResponseEntity<?> getMyRefundRequests() {
         try {
             Integer sellerId = getCurrentSellerIdFromToken();
+            System.out.println("DEBUG sellerId: " + sellerId); // Log sellerId lấy từ token
             List<RefundResponse> refunds = sellerService.getRefundRequestsForSeller(sellerId);
+            System.out.println("DEBUG refunds size: " + refunds.size()); // Log số lượng refund lấy được
             return ResponseEntity.ok(refunds);
         } catch (Exception e) {
             e.printStackTrace(); // Log lỗi chi tiết ra console
@@ -534,36 +536,73 @@ public class SellerController {
     }
     
     // SELLER DUYỆT YÊU CẦU HOÀN TIỀN/ĐỔI TRẢ
-    @PutMapping("/refunds/{refundId}/decision")
+    // Helper to validate refund status
+    private boolean isValidRefundStatus(String status) {
+        if (status == null) return false;
+        return java.util.Arrays.stream(com.example.BACKEND_OLDTECH_WEBSITE.Enums.RefundStatusEnum.values())
+                .anyMatch(e -> e.name().equalsIgnoreCase(status));
+    }
+
+    private String normalizeRefundStatus(String status) {
+        return java.util.Arrays.stream(com.example.BACKEND_OLDTECH_WEBSITE.Enums.RefundStatusEnum.values())
+                .map(Enum::name)
+                .filter(s -> s.equalsIgnoreCase(status))
+                .findFirst().orElse(null);
+    }
+
+    @PutMapping("/refunds/{refundId}")
     @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> decideRefund(
             @PathVariable Integer refundId,
             @RequestBody Map<String, Object> request) {
+        Integer sellerId = getCurrentSellerIdFromToken();
+        String status = (String) request.get("status"); 
+        String note = (String) request.getOrDefault("note", null);
+
+        // Validate status early for fast fail
+        if (!isValidRefundStatus(status)) {
+            return ResponseEntity.badRequest().body("Trạng thái hoàn tiền không hợp lệ. Chỉ chấp nhận: Approved, Pending, Processing, Rejected.");
+        }
+        String normalizedStatus = normalizeRefundStatus(status);
         try {
-            Integer sellerId = getCurrentSellerIdFromToken();
-            String decision = (String) request.get("decision"); // "APPROVED" hoặc "REJECTED"
-            String note = (String) request.getOrDefault("note", null);
-
-            if (!"APPROVED".equalsIgnoreCase(decision) && !"REJECTED".equalsIgnoreCase(decision)) {
-                return ResponseEntity.badRequest().body("Quyết định không hợp lệ. Chỉ chấp nhận 'APPROVED' hoặc 'REJECTED'.");
-            }
-
-            boolean result = sellerService.decideRefundRequest(sellerId, refundId, decision, note);
-            if (result) {
+            if (sellerService.decideRefundRequest(sellerId, refundId, normalizedStatus, note)) {
                 return ResponseEntity.ok("Cập nhật quyết định hoàn tiền thành công.");
-            } else {
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Không thể cập nhật quyết định hoàn tiền.");
             }
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Không thể cập nhật quyết định hoàn tiền.");
         } catch (EntityNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
-            // Check if it's specifically about seller approval
-            if (e.getMessage().contains("chưa được phê duyệt") || e.getMessage().contains("không hoạt động")) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            String msg = e.getMessage();
+            if (msg != null && (msg.contains("chưa được phê duyệt") || msg.contains("không hoạt động"))) {
+                return ResponseEntity.badRequest().body(msg);
             }
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(msg);
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật quyết định hoàn tiền: " + e.getMessage());
+            return ResponseEntity.internalServerError().body("Lỗi khi cập nhật quyết định hoàn tiền: " + e.getMessage());
+        }
+    }
+
+    // LẤY CHI TIẾT YÊU CẦU HOÀN TIỀN/ĐỔI TRẢ THEO ID
+    @GetMapping("/refunds/{refundId}")
+    @PreAuthorize("hasAuthority('Seller')")
+    public ResponseEntity<?> getRefundById(@PathVariable Integer refundId) {
+        try {
+            Integer sellerId = getCurrentSellerIdFromToken();
+            RefundResponse refund = sellerService.getRefundRequestByIdForSeller(sellerId, refundId);
+            if (refund == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Không tìm thấy yêu cầu hoàn tiền hoặc bạn không có quyền truy cập.");
+            }
+            return ResponseEntity.ok(refund);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (SecurityException e) {
+            String msg = e.getMessage();
+            if (msg != null && (msg.contains("chưa được phê duyệt") || msg.contains("không hoạt động"))) {
+                return ResponseEntity.badRequest().body(msg);
+            }
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(msg);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lấy thông tin hoàn tiền: " + e.getMessage());
         }
     }
 }

@@ -745,32 +745,37 @@ public class SellerService {
     }
 
     // Lấy danh sách yêu cầu hoàn tiền/đổi trả cho seller
+    @Transactional(readOnly = true)
     public List<RefundResponse> getRefundRequestsForSeller(Integer sellerId) {
-        // Lấy tất cả refund liên quan đến seller này (dựa vào order_detail và product)
-        List<OrderDetail> orderDetails = orderDetailRepository.findByProduct_SellerId(sellerId);
-        java.util.Set<Integer> orderIds = new java.util.HashSet<>();
-        for (OrderDetail od : orderDetails) {
-            if (od.getOrder() != null && od.getOrder().getOrderId() != null) {
-                orderIds.add(od.getOrder().getOrderId());
-            }
-        }
+        // Lấy refund liên quan đến seller bằng cách join sang order_detail/product nếu Refund không có sellerId
+        // Giả sử Refund có trường orderId, ta sẽ lấy các orderDetail của order đó và kiểm tra sellerId
         List<Refund> refunds = refundRepository.findAll();
-        List<RefundResponse> result = new java.util.ArrayList<>();
-        for (Refund refund : refunds) {
-            if (orderIds.contains(refund.getOrderId())) {
+        List<RefundResponse> result = refunds.stream()
+            .filter(r -> {
+                // Lấy orderId từ refund
+                Integer orderId = r.getOrderId();
+                if (orderId == null) return false;
+                // Lấy tất cả orderDetail của order này
+                List<OrderDetail> orderDetails = orderDetailRepository.findByOrder_OrderId(orderId);
+                // Kiểm tra có sản phẩm nào của seller này không
+                return orderDetails.stream().anyMatch(od -> od.getProduct() != null && sellerId.equals(od.getProduct().getSellerId()));
+            })
+            .map(r -> {
                 RefundResponse resp = new RefundResponse();
-                resp.setRefundId(refund.getRefundId());
-                resp.setOrderId(refund.getOrderId());
-                resp.setUserId(refund.getUserId());
-                resp.setSellerId(sellerId); // Gán sellerId cho từng refund
-                resp.setReason(refund.getReason());
-                resp.setStatus(refund.getStatus());
-                resp.setSellerNotes(refund.getSellerNotes());
-                resp.setRequestedAt(refund.getRequestedAt());
-                resp.setUpdatedAt(refund.getUpdatedAt());
-                result.add(resp);
-            }
-        }
+                // Gán các trường cơ bản từ Refund sang RefundResponse
+                resp.setRefundId(r.getRefundId());
+                resp.setOrderId(r.getOrderId());
+                resp.setStatus(r.getStatus());
+                resp.setUserId(r.getUserId());
+                resp.setRequestedAt(r.getRequestedAt());
+                resp.setUpdatedAt(r.getUpdatedAt());
+                resp.setSellerNotes(r.getSellerNotes());
+                resp.setReason(r.getReason());
+                // ...bổ sung các trường khác nếu cần...
+                return resp;
+            })
+            .toList();
+        System.out.println("DEBUG refunds (filtered by sellerId via orderDetail) size: " + result.size());
         return result;
     }
 
@@ -808,6 +813,33 @@ public class SellerService {
         refund.setUpdatedAt(new java.sql.Timestamp(System.currentTimeMillis()));
         refundRepository.save(refund);
         return true;
+    }
+
+    // Lấy chi tiết refund theo refundId, chỉ trả về nếu thuộc về sellerId
+    public RefundResponse getRefundRequestByIdForSeller(Integer sellerId, Integer refundId) {
+        Refund refund = refundRepository.findById(refundId)
+                .orElse(null);
+        if (refund == null) return null;
+        // Kiểm tra quyền sở hữu
+        Integer orderId = refund.getOrderId();
+        if (orderId == null) return null;
+        List<OrderDetail> orderDetails = orderDetailRepository.findByOrder_OrderId(orderId);
+        boolean sellerOwnsOrder = orderDetails.stream()
+                .anyMatch(od -> od.getProduct() != null && sellerId.equals(od.getProduct().getSellerId()));
+        if (!sellerOwnsOrder) return null;
+        // Map Refund -> RefundResponse
+        RefundResponse resp = new RefundResponse();
+        resp.setRefundId(refund.getRefundId());
+        resp.setOrderId(refund.getOrderId());
+        resp.setStatus(refund.getStatus());
+        resp.setUserId(refund.getUserId());
+        resp.setRequestedAt(refund.getRequestedAt());
+        resp.setUpdatedAt(refund.getUpdatedAt());
+        resp.setSellerNotes(refund.getSellerNotes());
+        resp.setReason(refund.getReason());
+        // Lấy sellerId từ orderDetail đầu tiên (nếu có)
+        orderDetails.stream().filter(od -> od.getProduct() != null).findFirst().ifPresent(od -> resp.setSellerId(od.getProduct().getSellerId()));
+        return resp;
     }
 }
 

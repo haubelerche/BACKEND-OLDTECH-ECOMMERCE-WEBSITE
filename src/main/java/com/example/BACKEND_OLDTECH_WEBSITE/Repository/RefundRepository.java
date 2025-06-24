@@ -17,11 +17,12 @@ public interface RefundRepository extends JpaRepository<Refund, Integer> {
 
     List<Refund> findByStatus(RefundStatusEnum status);
     List<Refund> findByUserId(Integer userId);
-    List<Refund> findByOrderId(Integer orderId);  }
-
-
-
-
+    List<Refund> findByOrderId(Integer orderId); 
+    @Query("SELECT DISTINCT r FROM Refund r " +
+           "JOIN OrderDetail od ON r.orderId = od.order.orderId " +
+           "JOIN Product p ON od.product.productId = p.productId " +
+           "WHERE p.sellerId = :sellerId")
+    List<Refund> findRefundsBySellerId(@Param("sellerId") Integer sellerId);}
 
     /*
      * Đếm số đơn đổi trả của seller trong khoảng thời gian
@@ -141,5 +142,4 @@ public interface RefundRepository extends JpaRepository<Refund, Integer> {
         @Param("sellerId") Integer sellerId,
         @Param("startDate") LocalDate startDate,
         @Param("endDate") LocalDate endDate);
-}
-*/
+}*/
