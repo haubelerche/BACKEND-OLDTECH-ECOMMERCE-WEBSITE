@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import jakarta.validation.Valid;
 
 import java.util.Map;
 
@@ -15,10 +16,41 @@ import java.util.Map;
 @CrossOrigin(origins = "${frontend.url}")
 public class PaymentController {
 
-    private static final Logger logger = LoggerFactory.getLogger(PaymentController.class);    @Autowired
-    private CheckoutService checkoutService;@PostMapping("/createPaymentUrl")
-    public ResponseEntity<?> createPaymentUrl(@RequestBody PaymentRequest request) {
+    private static final Logger logger = LoggerFactory.getLogger(PaymentController.class);
+    @Autowired
+    private CheckoutService checkoutService;    @PostMapping("/createPaymentUrl")
+    public ResponseEntity<?> createPaymentUrl(@Valid @RequestBody PaymentRequest request) {
         try {
+            // Validate required fields
+            if (request.getOrderId() == null || request.getOrderId().trim().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Order ID is required"
+                ));
+            }
+            
+            if (request.getAmount() <= 0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Amount must be greater than 0"
+                ));
+            }
+            
+            // Validate and set default orderInfo if empty
+            if (request.getOrderInfo() == null || request.getOrderInfo().trim().isEmpty()) {
+                request.setOrderInfo("Payment for order #" + request.getOrderId());
+                logger.info("Set default orderInfo for order: {}", request.getOrderId());
+            }
+            
+            // Validate orderInfo length (MoMo requires 1-500 characters)
+            if (request.getOrderInfo().length() > 500) {
+                request.setOrderInfo(request.getOrderInfo().substring(0, 500));
+                logger.warn("Truncated orderInfo to 500 characters for order: {}", request.getOrderId());
+            }
+            
+            logger.info("Creating payment URL for order: {}, amount: {}, orderInfo: '{}'", 
+                       request.getOrderId(), request.getAmount(), request.getOrderInfo());
+            
             Map<String, Object> result = checkoutService.createPaymentUrl(request);
             boolean success = (Boolean) result.get("success");
             
@@ -35,7 +67,14 @@ public class PaymentController {
                 "message", "Internal server error: " + e.getMessage()
             ));
         }
-    }    @GetMapping("/handlePaymentReturn")
+    }
+
+
+
+
+
+
+    @GetMapping("/handlePaymentReturn")
     public ResponseEntity<?> handlePaymentReturn(@RequestParam Map<String, String> response) {
         try {
             Map<String, Object> result = checkoutService.handlePaymentReturn(response);

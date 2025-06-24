@@ -24,6 +24,9 @@ public class ProductService {
     @Autowired
     private CategoryRepository categoryRepository;
 
+    @Autowired
+    private UserService userService;
+
     public List<Product> searchProducts(String keyword) {
         return productRepository.findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(keyword, keyword);
     }
@@ -150,5 +153,96 @@ public class ProductService {
         product.setUpdatedAt(Timestamp.from(Instant.now()));
 
         productRepository.save(product);
+    }
+
+    /**
+     * Filter products by seller's location
+     */
+    public List<Product> filterProductsBySellerLocation(List<Product> products, String location) {
+        if (location == null || location.trim().isEmpty()) {
+            return products;
+        }
+        
+        List<Product> filteredProducts = new ArrayList<>();
+        String searchLocation = location.toLowerCase().trim();
+        
+        for (Product product : products) {
+            try {
+                // Get seller's location from User model
+                var seller = userService.findUserById(product.getSellerId());
+                if (seller != null && seller.getLivingLocation() != null) {
+                    String sellerLocation = seller.getLivingLocation().toLowerCase();
+                    if (sellerLocation.contains(searchLocation)) {
+                        filteredProducts.add(product);
+                    }
+                }
+            } catch (Exception e) {
+                // Log error but continue processing other products
+                System.err.println("Error getting seller location for product " + product.getProductId() + ": " + e.getMessage());
+            }
+        }
+        
+        return filteredProducts;
+    }
+
+    /**
+     * Filter products by location proximity (basic implementation)
+     * This is a simplified version - in a real application, you'd use proper geolocation APIs
+     */
+    public List<Product> filterProductsByLocationProximity(List<Product> products, String userLocation, Integer radiusKm) {
+        if (userLocation == null || userLocation.trim().isEmpty()) {
+            return products;
+        }
+          List<Product> filteredProducts = new ArrayList<>();
+        
+        for (Product product : products) {
+            try {
+                // Get seller's location from User model
+                var seller = userService.findUserById(product.getSellerId());
+                if (seller != null && seller.getLivingLocation() != null) {
+                    String sellerLocation = seller.getLivingLocation().toLowerCase();
+                    
+                    // Simple proximity check - in reality you'd calculate actual distance
+                    // For now, we'll check if locations are in the same city/province
+                    if (isLocationNearby(userLocation, sellerLocation, radiusKm)) {
+                        filteredProducts.add(product);
+                    }
+                }
+            } catch (Exception e) {
+                // Log error but continue processing other products
+                System.err.println("Error checking location proximity for product " + product.getProductId() + ": " + e.getMessage());
+            }
+        }
+        
+        return filteredProducts;
+    }
+
+    /**
+     * Simple proximity check - in a real application, you'd use proper geolocation calculation
+     * This is just a basic string matching implementation
+     */
+    private boolean isLocationNearby(String userLocation, String sellerLocation, Integer radiusKm) {
+        if (userLocation == null || sellerLocation == null) {
+            return false;
+        }
+        
+        String userLoc = userLocation.toLowerCase().trim();
+        String sellerLoc = sellerLocation.toLowerCase().trim();
+        
+        // If locations contain same city/province name, consider them nearby
+        String[] userLocationParts = userLoc.split("[,\\s]+");
+        String[] sellerLocationParts = sellerLoc.split("[,\\s]+");
+        
+        for (String userPart : userLocationParts) {
+            if (userPart.length() > 2) { // Only check meaningful parts
+                for (String sellerPart : sellerLocationParts) {
+                    if (sellerPart.contains(userPart) || userPart.contains(sellerPart)) {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        return false;
     }
 }

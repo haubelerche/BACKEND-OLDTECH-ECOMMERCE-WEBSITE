@@ -33,6 +33,8 @@ public class NotificationController {
     /**
      * Lấy tất cả thông báo của người dùng hiện tại (sắp xếp theo thời gian mới nhất)
      */
+
+    @PreAuthorize("hasAuthority('Customer')")
     @GetMapping("/my")
     public ResponseEntity<Map<String, Object>> getMyNotifications() {
         try {
@@ -58,6 +60,7 @@ public class NotificationController {
     /**
      * Lấy thông báo chưa đọc của người dùng hiện tại
      */
+
     @GetMapping("/my/unread")
     public ResponseEntity<Map<String, Object>> getMyUnreadNotifications() {
         try {
@@ -160,13 +163,13 @@ public class NotificationController {
         }
     }
 
-    /*--- ADMIN OPERATIONS ---*/
+    /*--- Admin OPERATIONS ---*/
 
     /**
      * Gửi thông báo đến một người dùng cụ thể (Admin only)
      */
     @PostMapping("/send/user/{userId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('Admin')")
     public ResponseEntity<Map<String, Object>> sendNotificationToUser(
             @PathVariable Integer userId,
             @RequestBody CreateNotificationRequest request) {
@@ -199,7 +202,7 @@ public class NotificationController {
      * Gửi thông báo đến nhiều người dùng (Admin only)
      */
     @PostMapping("/send/users")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('Admin')")
     public ResponseEntity<Map<String, Object>> sendNotificationToUsers(
             @RequestBody Map<String, Object> requestBody) {
         try {
@@ -231,7 +234,7 @@ public class NotificationController {
      * Gửi thông báo đến tất cả người dùng (Admin only)
      */
     @PostMapping("/send/all")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('Admin')")
     public ResponseEntity<Map<String, Object>> sendNotificationToAllUsers(
             @RequestBody CreateNotificationRequest request) {
         try {
@@ -257,7 +260,7 @@ public class NotificationController {
      * Gửi thông báo đến người dùng theo vai trò (Admin only)
      */
     @PostMapping("/send/roles")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('Admin')")
     public ResponseEntity<Map<String, Object>> sendNotificationToUsersByRoles(
             @RequestBody Map<String, Object> requestBody) {
         try {
@@ -291,7 +294,7 @@ public class NotificationController {
      * Gửi thông báo nhắc nhở hoàn thành hồ sơ (Admin only hoặc System)
      */
     @PostMapping("/send/profile-reminder/{userId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('Admin')")
     public ResponseEntity<Map<String, Object>> sendProfileCompletionReminder(@PathVariable Integer userId) {
         try {
             Notification notification = notificationService.sendProfileCompletionReminder(userId);
@@ -320,7 +323,7 @@ public class NotificationController {
      * Gửi thông báo xác minh tài khoản (Admin only)
      */
     @PostMapping("/send/verification/{userId}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAuthority('Admin')")
     public ResponseEntity<Map<String, Object>> sendAccountVerificationNotification(
             @PathVariable Integer userId,
             @RequestParam boolean approved) {
@@ -349,6 +352,31 @@ public class NotificationController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     /*--- HELPER METHODS ---*/
 
@@ -397,8 +425,7 @@ public class NotificationController {
             String typeString = (String) requestBody.get("notificationType");
             try {
                 request.setNotificationType(
-                    com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum.valueOf(typeString));
-            } catch (IllegalArgumentException e) {
+                    com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum.valueOf(typeString));            } catch (IllegalArgumentException e) {
                 request.setNotificationType(
                     com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum.ADMIN_ANNOUNCEMENT);
             }

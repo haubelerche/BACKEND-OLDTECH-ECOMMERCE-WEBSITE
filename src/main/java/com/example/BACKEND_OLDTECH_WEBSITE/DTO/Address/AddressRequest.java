@@ -30,22 +30,10 @@ public class AddressRequest {
 
     private Boolean isDefault;
 
-    @NotBlank(message = "Full name cannot be blank")
-    private String fullName;
-
-    @NotBlank(message = "Phone number cannot be blank")
-    private String phoneNumber;
 
     // Create explicit getter for boolean field to avoid naming conflicts
     public Boolean isIsDefault() {
         return isDefault;
     }
 
-    public Boolean getIsDefault() {
-        return isDefault;
-    }
-
-    public void setIsDefault(Boolean isDefault) {
-        this.isDefault = isDefault;
-    }
 }

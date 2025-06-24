@@ -10,6 +10,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.CartItem;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.OrderDetail;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Orders;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderDetailRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 @Service
 public class CheckoutService {
@@ -48,7 +51,7 @@ public class CheckoutService {
     public Map<String, Object> checkoutAllItems(Integer userId, PaymentMethodEnum paymentMethod, 
                                                Integer shippingAddressId, String notes) {
         // Lấy tất cả sản phẩm trong giỏ hàng
-        List<CartItem> cartItems = cartItemService.getCartItemsByUserId(userId);
+        List<CartItem> cartItems = cartItemService.getCartItemsByCartId(userId);
         
         if (cartItems.isEmpty()) {
             Map<String, Object> response = new HashMap<>();
@@ -84,6 +87,49 @@ public class CheckoutService {
         return response;
     }
 
+@Transactional
+public Map<String, Object> checkoutCart(Integer userId, Integer cartId, PaymentMethodEnum paymentMethod,
+                                        Integer shippingAddressId, String notes) {
+    // Lấy tất cả sản phẩm trong giỏ hàng theo cartId
+    List<CartItem> cartItems = cartItemService.getCartItemsByCartId(cartId);
+
+    if (cartItems == null || cartItems.isEmpty()) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Giỏ hàng trống hoặc không tồn tại, không thể thanh toán");
+        response.put("success", false);
+        return response;
+    }
+
+    // Tính tổng tiền
+    BigDecimal totalAmount = cartItems.stream()
+            .map(item -> item.getProduct().getPrice())
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+    // Tạo đơn hàng
+    CreateOrderRequest orderRequest = new CreateOrderRequest();
+    orderRequest.setPaymentMethod(paymentMethod);
+    orderRequest.setTotalAmount(totalAmount);
+    orderRequest.setShippingAddressId(shippingAddressId);
+    orderRequest.setNotes(notes);
+
+    Orders newOrder = createOrderFromCart(userId, orderRequest, cartItems);
+
+ // Xử lý theo phương thức thanh toán
+    if (paymentMethod == PaymentMethodEnum.Momo) {
+        removeItemsFromCart(userId, cartItems);
+        return handleMomoPayment(newOrder, cartItems);
+    } else if (paymentMethod == PaymentMethodEnum.CashOnDelivery) {
+        return handleCashOnDeliveryPayment(newOrder, cartItems);
+    }
+
+    Map<String, Object> response = new HashMap<>();
+    response.put("message", "Phương thức thanh toán không được hỗ trợ");
+    response.put("success", false);
+    return response;
+}
+
+
+
     @Transactional
     public Map<String, Object> checkoutSelectedItems(Integer userId, PaymentMethodEnum paymentMethod,
                                                    List<Integer> selectedProductIds, Integer shippingAddressId, 
@@ -96,7 +142,7 @@ public class CheckoutService {
         }
 
         // Lấy các sản phẩm được chọn từ giỏ hàng
-        List<CartItem> allCartItems = cartItemService.getCartItemsByUserId(userId);
+        List<CartItem> allCartItems = cartItemService.getCartItemsByCartId(userId);
         List<CartItem> selectedItems = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
 
@@ -304,7 +350,19 @@ public class CheckoutService {
         
         // Tạo Order Details từ Cart Items
         createOrderDetails(savedOrder, items);
-          return savedOrder;
+
+        // Cập nhật trạng thái sản phẩm thành Sold và unavailable trên các giỏ hàng khác
+        Set<Integer> updatedProductIds = new HashSet<>();
+        for (CartItem item : items) {
+            Product product = item.getProduct();
+            if (product != null && !updatedProductIds.contains(product.getProductId())) {
+                product.setIsVisible(false); // ẩn khỏi các giỏ hàng khác
+                product.setStatus(com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum.Sold); // chuyển trạng thái Sold
+                cartItemService.getProductRepository().save(product);
+                updatedProductIds.add(product.getProductId());
+            }
+        }
+        return savedOrder;
     }
 
     // ===== PRIVATE HELPER METHODS =====

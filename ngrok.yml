@@ -4,7 +4,7 @@ tunnels:
     addr: 8080  # This must match your Spring Boot port
     proto: http
     hostname: funny-leading-puma.ngrok-free.app
-    host-header: "localhost:8080"
+    host_header: "localhost:8080"
 
 agent:
   authtoken: 2uLyA7UFQPg1tCd8nrla3SIVifw_4YWxDnznFtpsBnBku6KAr

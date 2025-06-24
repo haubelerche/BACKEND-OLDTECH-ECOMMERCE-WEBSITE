@@ -22,7 +22,7 @@ public class CheckoutRequest {
     @Size(max = 500, message = "Ghi chú không được vượt quá 500 ký tự")
     private String notes; // Optional
     
-    private List<Integer> selectedProductIds; // For selective checkout, if null means checkout all items
+   private Integer cartId; // Optional, can be null if no coupon is applied
     
     private Boolean checkoutAll = true; // Default to checkout all items
 }

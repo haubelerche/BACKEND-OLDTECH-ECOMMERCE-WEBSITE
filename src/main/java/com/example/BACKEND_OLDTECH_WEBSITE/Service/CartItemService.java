@@ -1,5 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Cart.CartItemDTO;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.CartItem;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 // import com.example.BACKEND_OLDTECH_WEBSITE.Model.User; // User might be needed for userId -> cartId logic
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 
@@ -66,11 +68,19 @@ public class CartItemService {
     }
 
     @Transactional(readOnly = true)
-    public List<CartItem> getCartItemsByUserId(Integer userId) {
+    public List<CartItemDTO> getCartItemsByUserId(Integer userId) {
         Integer cartId = resolveCartIdForUser(userId);
-        return cartItemRepository.findByCartId(cartId);
+        List<CartItem> items = cartItemRepository.findByCartId(cartId);
+
+        // Chuyển sang DTO để trả về trạng thái sản phẩm
+        List<CartItemDTO> result = new ArrayList<>();
+        for (CartItem item : items) {
+            Product product = item.getProduct();
+            boolean available = product != null && isProductAvailable(product.getProductId());
+            result.add(new CartItemDTO(item, available));
+        }
+        return result;
     }
-    
 
     @Transactional(readOnly = true)
     public List<CartItem> getCartItemsByCartId(Integer cartId) {
@@ -102,6 +112,19 @@ public class CartItemService {
                         "Sản phẩm với ID: " + productId + " không tồn tại trong giỏ hàng với ID: " + cartId));
         
         cartItemRepository.delete(itemToRemove);
+    }
+
+    @Transactional
+    public void cancelOrder(Integer userId, Integer productId) {
+        // Đổi trạng thái sản phẩm về available
+        Product product = productRepository.findById(productId)
+            .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy sản phẩm"));
+        product.setIsVisible(true); // hoặc set status = APPROVED
+        productRepository.save(product);
+
+        // Xóa CartItem của user A với sản phẩm này
+        Integer cartId = resolveCartIdForUser(userId);
+        cartItemRepository.deleteByCartIdAndProduct(cartId, product);
     }
 
     @Transactional
@@ -158,31 +181,25 @@ public class CartItemService {
     }
 
     /**
-     * Validate cart items and remove any unavailable products
-     * Returns count of removed items
+     * Đếm số sản phẩm không khả dụng trong giỏ hàng (không xóa)
+     * Returns count of unavailable items
      */
-    @Transactional
-    public int cleanupUnavailableProducts(Integer userId) {
-        try {
-            Integer cartId = resolveCartIdForUser(userId);
-            List<CartItem> cartItems = cartItemRepository.findByCartId(cartId);
-            
-            int removedCount = 0;
-            for (CartItem item : cartItems) {
-                if (!isProductAvailable(item.getProduct().getProductId())) {
-                    cartItemRepository.delete(item);
-                    removedCount++;
-                }
+    @Transactional(readOnly = true)
+    public int countUnavailableProductsInCart(Integer userId) {
+        Integer cartId = resolveCartIdForUser(userId);
+        List<CartItem> cartItems = cartItemRepository.findByCartId(cartId);
+
+        int unavailableCount = 0;
+        for (CartItem item : cartItems) {
+            Product product = item.getProduct();
+            if (product == null || !isProductAvailable(product.getProductId())) {
+                unavailableCount++;
             }
-            
-            if (removedCount > 0) {
-                System.out.println("Đã xóa " + removedCount + " sản phẩm không khả dụng khỏi giỏ hàng của người dùng " + userId);
-            }
-            
-            return removedCount;
-        } catch (Exception e) {
-            System.err.println("Lỗi khi dọn dẹp giỏ hàng: " + e.getMessage());
-            return 0;
         }
+        return unavailableCount;
+    }
+
+    public ProductRepository getProductRepository() {
+        return this.productRepository;
     }
 }

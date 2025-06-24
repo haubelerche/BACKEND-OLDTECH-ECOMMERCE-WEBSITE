@@ -19,10 +19,12 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.Comparator;
 
 @RestController
 @RequestMapping("/products")
@@ -69,7 +71,7 @@ public class ProductController {
     /**
      * Verify a single product
      */
-    @PutMapping("/{productId}/verify")
+    @PutMapping("/verify/{productId}")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
     public ResponseEntity<?> verifyProduct(@PathVariable Integer productId) {
         try {
@@ -100,7 +102,7 @@ public class ProductController {
      * Reject a single product
      * Also removes the product from all users' carts
      */
-    @PutMapping("/{productId}/reject")
+    @PutMapping("/reject/{productId}")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
     public ResponseEntity<?> rejectProduct(@PathVariable Integer productId) {
         try {
@@ -141,7 +143,7 @@ public class ProductController {
     /**
      * Hide all products from a specific seller (Admin only)
      */
-    @PutMapping("/seller/{sellerId}/hide-all")
+    @PutMapping("/seller/hide-all/{sellerId}")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
     public ResponseEntity<?> hideAllProductsFromSeller(@PathVariable Integer sellerId) {
         try {
@@ -169,7 +171,7 @@ public class ProductController {
     /**
      * Update product category (Admin only)
      */
-    @PutMapping("/{productId}/category")
+    @PutMapping("/category/{productId}")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
     public ResponseEntity<?> setProductCategory(@PathVariable Integer productId, 
                                               @RequestParam Integer categoryId) {
@@ -316,51 +318,183 @@ public class ProductController {
     }
 
     /**
-     * Get products by status (Admin only)
+     * Get products with sorting and filtering options
      */
-    @GetMapping("/status/{status}")
-    @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
-    public ResponseEntity<?> getProductsByStatus(@PathVariable String status) {
+    @GetMapping("/filter")
+    public ResponseEntity<?> getProductsWithFilters(
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(required = false, defaultValue = "asc") String sortOrder,
+            @RequestParam(required = false) String minPrice,
+            @RequestParam(required = false) String maxPrice,
+            @RequestParam(required = false) String location,
+            @RequestParam(required = false) String keyword) {
         try {
-            if (status == null || status.trim().isEmpty()) {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("success", false, "message", "Trạng thái không được trống"));
+            logger.info("Getting products with filters - sortBy: {}, sortOrder: {}, minPrice: {}, maxPrice: {}, location: {}, keyword: {}", 
+                       sortBy, sortOrder, minPrice, maxPrice, location, keyword);
+            
+            List<Product> products = productService.getAllProducts();
+            
+            // Filter only visible and approved products
+            List<Product> filteredProducts = products.stream()
+                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) && 
+                                     Boolean.TRUE.equals(product.getIsApproved()))
+                    .collect(Collectors.toList());
+            
+            // Apply keyword filter if provided
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                filteredProducts = filteredProducts.stream()
+                        .filter(product -> 
+                            product.getName().toLowerCase().contains(keyword.toLowerCase()) ||
+                            product.getDescription().toLowerCase().contains(keyword.toLowerCase()))
+                        .collect(Collectors.toList());
             }
             
-            ProductStatusEnum statusEnum;
-            try {
-                statusEnum = ProductStatusEnum.valueOf(status.trim());
-            } catch (IllegalArgumentException e) {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("success", false, "message", "Trạng thái không hợp lệ: " + status));
+            // Apply price range filter if provided
+            if (minPrice != null && !minPrice.trim().isEmpty()) {
+                try {
+                    BigDecimal minPriceValue = new BigDecimal(minPrice);
+                    filteredProducts = filteredProducts.stream()
+                            .filter(product -> product.getPrice().compareTo(minPriceValue) >= 0)
+                            .collect(Collectors.toList());
+                } catch (NumberFormatException e) {
+                    logger.warn("Invalid minPrice format: {}", minPrice);
+                }
             }
             
-            logger.info("Admin getting products by status: {}", status);
-            List<Product> products = productService.getProductsByStatus(statusEnum);
+            if (maxPrice != null && !maxPrice.trim().isEmpty()) {
+                try {
+                    BigDecimal maxPriceValue = new BigDecimal(maxPrice);
+                    filteredProducts = filteredProducts.stream()
+                            .filter(product -> product.getPrice().compareTo(maxPriceValue) <= 0)
+                            .collect(Collectors.toList());
+                } catch (NumberFormatException e) {
+                    logger.warn("Invalid maxPrice format: {}", maxPrice);
+                }
+            }
             
-            List<ProductListResponse> response = products.stream()
+            // Apply location filter if provided (filter by seller's location)
+            if (location != null && !location.trim().isEmpty()) {
+                filteredProducts = productService.filterProductsBySellerLocation(filteredProducts, location);
+            }
+            
+            // Apply sorting
+            if (sortBy != null && !sortBy.trim().isEmpty()) {
+                switch (sortBy.toLowerCase()) {
+                    case "price":
+                        if ("desc".equalsIgnoreCase(sortOrder)) {
+                            filteredProducts.sort(Comparator.comparing(Product::getPrice).reversed());
+                        } else {
+                            filteredProducts.sort(Comparator.comparing(Product::getPrice));
+                        }
+                        break;
+                    case "name":
+                        if ("desc".equalsIgnoreCase(sortOrder)) {
+                            filteredProducts.sort(Comparator.comparing(Product::getName).reversed());
+                        } else {
+                            filteredProducts.sort(Comparator.comparing(Product::getName));
+                        }
+                        break;
+                    case "created":
+                    case "date":
+                        if ("desc".equalsIgnoreCase(sortOrder)) {
+                            filteredProducts.sort(Comparator.comparing(Product::getCreatedAt).reversed());
+                        } else {
+                            filteredProducts.sort(Comparator.comparing(Product::getCreatedAt));
+                        }
+                        break;
+                    default:
+                        logger.warn("Unknown sort field: {}", sortBy);
+                        break;
+                }
+            }
+            
+            List<ProductListResponse> response = filteredProducts.stream()
                     .map(this::convertToListResponse)
                     .collect(Collectors.toList());
             
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
-            result.put("message", "Lấy danh sách sản phẩm theo trạng thái thành công");
-            result.put("status", status);
+            result.put("message", "Lấy danh sách sản phẩm với bộ lọc thành công");
             result.put("products", response);
             result.put("totalCount", response.size());
+            result.put("filters", Map.of(
+                "sortBy", sortBy != null ? sortBy : "",
+                "sortOrder", sortOrder,
+                "minPrice", minPrice != null ? minPrice : "",
+                "maxPrice", maxPrice != null ? maxPrice : "",
+                "location", location != null ? location : "",
+                "keyword", keyword != null ? keyword : ""
+            ));
             
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            logger.error("Error getting products by status '{}': {}", status, e.getMessage(), e);
-            return handleException("Lỗi khi lấy sản phẩm theo trạng thái", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            logger.error("Error getting products with filters: {}", e.getMessage(), e);
+            return handleException("Lỗi khi lấy sản phẩm với bộ lọc", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-
-
-
-
-
+    /**
+     * Search products near user's location (advanced search)
+     */
+    @GetMapping("/search-nearby")
+    public ResponseEntity<?> searchProductsNearby(
+            @RequestParam(required = false) String userLocation,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false, defaultValue = "50") Integer radiusKm,
+            @RequestParam(required = false, defaultValue = "0") Integer page,
+            @RequestParam(required = false, defaultValue = "20") Integer size) {
+        try {
+            logger.info("Searching products nearby - location: {}, keyword: {}, radius: {}km", 
+                       userLocation, keyword, radiusKm);
+            
+            List<Product> products;
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                products = productService.searchProducts(keyword.trim());
+            } else {
+                products = productService.getAllProducts();
+            }
+            
+            // Filter only visible and approved products
+            List<Product> filteredProducts = products.stream()
+                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) && 
+                                     Boolean.TRUE.equals(product.getIsApproved()))
+                    .collect(Collectors.toList());
+            
+            // Filter by location proximity if userLocation is provided
+            if (userLocation != null && !userLocation.trim().isEmpty()) {
+                filteredProducts = productService.filterProductsByLocationProximity(
+                    filteredProducts, userLocation, radiusKm);
+            }
+            
+            // Apply pagination
+            int startIndex = page * size;
+            int endIndex = Math.min(startIndex + size, filteredProducts.size());
+            List<Product> paginatedProducts = filteredProducts.subList(startIndex, endIndex);
+            
+            List<ProductListResponse> response = paginatedProducts.stream()
+                    .map(this::convertToListResponse)
+                    .collect(Collectors.toList());
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "Tìm kiếm sản phẩm lân cận thành công");
+            result.put("products", response);
+            result.put("currentPage", page);
+            result.put("pageSize", size);
+            result.put("totalCount", filteredProducts.size());
+            result.put("totalPages", (int) Math.ceil((double) filteredProducts.size() / size));
+            result.put("searchCriteria", Map.of(
+                "userLocation", userLocation != null ? userLocation : "",
+                "keyword", keyword != null ? keyword : "",
+                "radiusKm", radiusKm
+            ));
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error searching products nearby: {}", e.getMessage(), e);
+            return handleException("Lỗi khi tìm kiếm sản phẩm lân cận", e, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
     /*--SELLER OPERATIONS--*/    /**
      * Hide a product (Seller or Admin)
      * Also removes the product from all users' carts

@@ -7,7 +7,9 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "product")
 @Data
@@ -40,6 +42,9 @@ public class Product {
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     private ProductStatusEnum status;
+    
+    @Column(name = "seller_city")
+    private String sellerCity;
 
     @Column(name = "is_approved")
     private Boolean isApproved;

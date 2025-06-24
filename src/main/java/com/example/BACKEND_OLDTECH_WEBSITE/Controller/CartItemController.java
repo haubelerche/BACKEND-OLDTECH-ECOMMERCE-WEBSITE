@@ -1,5 +1,6 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Cart.CartItemDTO;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.CartItem;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
@@ -33,11 +34,13 @@ public class CartItemController {
 
     @Autowired
     private UserService userService;// CUSTOMER - Thêm sản phẩm vào giỏ hàng
-    @PostMapping("/addItem/{userId}")
-    @PreAuthorize("hasAuthority('Customer') and hasAuthority('Admin')")
-    public ResponseEntity<?> addItem(@PathVariable Integer userId,
-                                     @RequestParam Integer productId) {
+    @PostMapping("/addItem")
+    @PreAuthorize("hasAuthority('Customer')")
+    public ResponseEntity<?> addItem(@RequestParam Integer productId) {
         try {
+            // Lấy userId từ token
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            Integer userId = userService.getUserIdFromAuthentication(authentication);
             // Validate product availability before adding to cart
             if (!cartItemService.isProductAvailable(productId)) {
                 Map<String, Object> response = new HashMap<>();
@@ -46,21 +49,15 @@ public class CartItemController {
                 response.put("productId", productId);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
-            
             cartItemService.addItem(userId, productId);
-            
             // Tự động tính tổng tiền sau khi thêm sản phẩm
             BigDecimal newTotal = cartItemService.getTotalPriceByUserId(userId);
-            
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Đã thêm sản phẩm vào giỏ hàng thành công");
             response.put("success", true);
             response.put("newTotalPrice", newTotal);
             response.put("productId", productId);
-            
-            logger.info("Người dùng {} đã thêm sản phẩm {} vào giỏ hàng. Tổng tiền mới: {}", 
-                       userId, productId, newTotal);
-            
+            logger.info("Người dùng {} đã thêm sản phẩm {} vào giỏ hàng. Tổng tiền mới: {}", userId, productId, newTotal);
             return ResponseEntity.ok(response);
         } catch (EntityNotFoundException e) {
             return handleException("Không tìm thấy sản phẩm", e, HttpStatus.NOT_FOUND);
@@ -70,70 +67,73 @@ public class CartItemController {
     }
 
     // CUSTOMER - Lấy tất cả sản phẩm trong giỏ hàng
-    @GetMapping("/getAllItems/{userId}")
+    @GetMapping("/myCart")
     @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> getCartItems(@PathVariable Integer userId) {
+    public ResponseEntity<?> getCartItems() {
         try {
-            // Clean up unavailable products first
-            int removedCount = cartItemService.cleanupUnavailableProducts(userId);
-            
-            List<CartItem> items = cartItemService.getCartItemsByUserId(userId);
-            BigDecimal totalPrice = cartItemService.getTotalPriceByUserId(userId);
-            
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            Integer userId = userService.getUserIdFromAuthentication(authentication);
+            logger.info("[DEBUG] Lấy giỏ hàng cho userId: {}", userId);
+            if (userId == null) {
+                logger.error("[ERROR] Không xác định được userId từ token");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of(
+                    "message", "Không xác định được người dùng từ token",
+                    "success", false
+                ));
+            }
+            int unavailableCount = 0;
+            try {
+                unavailableCount = cartItemService.countUnavailableProductsInCart(userId);
+            } catch (Exception e) {
+                logger.error("[ERROR] Lỗi khi countUnavailableProductsInCart: {}", e.getMessage(), e);
+                return handleException("Lỗi khi kiểm tra sản phẩm không khả dụng", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+            List<CartItemDTO> items;
+            try {
+                items = cartItemService.getCartItemsByUserId(userId);
+            } catch (Exception e) {
+                logger.error("[ERROR] Lỗi khi getCartItemsByUserId: {}", e.getMessage(), e);
+                return handleException("Lỗi khi lấy danh sách sản phẩm trong giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+            BigDecimal totalPrice;
+            try {
+                totalPrice = cartItemService.getTotalPriceByUserId(userId);
+            } catch (Exception e) {
+                logger.error("[ERROR] Lỗi khi getTotalPriceByUserId: {}", e.getMessage(), e);
+                return handleException("Lỗi khi tính tổng tiền giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            }
             Map<String, Object> response = new HashMap<>();
             response.put("cartItems", items);
-            response.put("totalPrice", totalPrice);
             response.put("itemCount", items.size());
-            response.put("success", true);
-            
-            if (removedCount > 0) {
-                response.put("notice", "Đã tự động xóa " + removedCount + " sản phẩm không khả dụng khỏi giỏ hàng");
-                response.put("removedUnavailableItems", removedCount);
+            if (unavailableCount > 0) {
+                response.put("notice", "Có " + unavailableCount + " sản phẩm không khả dụng trong giỏ hàng");
+                response.put("unavailableItems", unavailableCount);
             }
-            
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return handleException("Lỗi khi lấy danh sách giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            logger.error("[ERROR] Lỗi không xác định khi lấy giỏ hàng", e);
+            return handleException("Lỗi không xác định khi lấy giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    // CUSTOMER - Lấy tổng tiền giỏ hàng
-    @GetMapping("/totalPrice/{userId}")
-    @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> getTotalPrice(@PathVariable Integer userId) {
-        try {
-            BigDecimal total = cartItemService.getTotalPriceByUserId(userId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("totalPrice", total);
-            response.put("success", true);
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return handleException("Lỗi khi tính tổng tiền giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+
 
     // CUSTOMER - Xóa sản phẩm khỏi giỏ hàng
-    @DeleteMapping("/removeItem/{userId}") 
+    @DeleteMapping("/removeItem")
     @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> removeItem(@PathVariable Integer userId, 
-                                        @RequestParam Integer productId) {
+    public ResponseEntity<?> removeItem(@RequestParam Integer productId) {
         try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            Integer userId = userService.getUserIdFromAuthentication(authentication);
             cartItemService.removeItem(userId, productId);
-            
             // Tự động tính lại tổng tiền sau khi xóa sản phẩm
             BigDecimal newTotal = cartItemService.getTotalPriceByUserId(userId);
-            
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Đã xóa sản phẩm khỏi giỏ hàng thành công");
             response.put("success", true);
             response.put("newTotalPrice", newTotal);
             response.put("removedProductId", productId);
-            
-            logger.info("Người dùng {} đã xóa sản phẩm {} khỏi giỏ hàng. Tổng tiền mới: {}", 
-                       userId, productId, newTotal);
-            
+            logger.info("Người dùng {} đã xóa sản phẩm {} khỏi giỏ hàng. Tổng tiền mới: {}", userId, productId, newTotal);
             return ResponseEntity.ok(response);
         } catch (EntityNotFoundException e) {
             return handleException("Không tìm thấy sản phẩm trong giỏ hàng", e, HttpStatus.NOT_FOUND);
@@ -143,10 +143,12 @@ public class CartItemController {
     }
 
     // CUSTOMER - Dọn sạch giỏ hàng
-    @DeleteMapping("/clear/{userId}")
+    @DeleteMapping("/clear")
     @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> clearCart(@PathVariable Integer userId) {
+    public ResponseEntity<?> clearCart() {
         try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            Integer userId = userService.getUserIdFromAuthentication(authentication);
             cartItemService.clearCartByUserId(userId);
             
             Map<String, Object> response = new HashMap<>();
@@ -161,47 +163,53 @@ public class CartItemController {
             return handleException("Lỗi khi dọn sạch giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }    // CUSTOMER - Thanh toán toàn bộ giỏ hàng
-    @PostMapping("/checkout/all/{userId}")
+    @PostMapping("/checkout/all")
     @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> checkoutAllItems(@PathVariable Integer userId,
-                                            @RequestParam PaymentMethodEnum paymentMethod,
-                                            @RequestParam(required = false) Integer shippingAddressId,
-                                            @RequestParam(required = false) String notes) {
+    public ResponseEntity<?> checkoutAllItems(
+            @RequestParam PaymentMethodEnum paymentMethod,
+            @RequestParam(required = false) Integer shippingAddressId,
+            @RequestParam(required = false) String notes) {
         try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            Integer userId = userService.getUserIdFromAuthentication(authentication);
             Map<String, Object> result = checkoutService.checkoutAllItems(userId, paymentMethod, shippingAddressId, notes);
-            
             boolean success = (Boolean) result.get("success");
             if (success) {
                 return ResponseEntity.ok(result);
             } else {
                 return ResponseEntity.badRequest().body(result);
             }
-
         } catch (Exception e) {
             return handleException("Lỗi khi thanh toán toàn bộ giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }    // CUSTOMER - Thanh toán sản phẩm được chọn
-    @PostMapping("/checkout/selected/{userId}")
-    @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> checkoutSelectedItems(@PathVariable Integer userId,
-                                                 @RequestParam PaymentMethodEnum paymentMethod,
-                                                 @RequestBody List<Integer> selectedProductIds,
-                                                 @RequestParam(required = false) Integer shippingAddressId,
-                                                 @RequestParam(required = false) String notes) {
-        try {
-            Map<String, Object> result = checkoutService.checkoutSelectedItems(userId, paymentMethod, selectedProductIds, shippingAddressId, notes);
-            
-            boolean success = (Boolean) result.get("success");
-            if (success) {
-                return ResponseEntity.ok(result);
-            } else {
-                return ResponseEntity.badRequest().body(result);
-            }
 
-        } catch (Exception e) {
-            return handleException("Lỗi khi thanh toán sản phẩm được chọn", e, HttpStatus.INTERNAL_SERVER_ERROR);
+
+// CUSTOMER - Thanh toán sản phẩm trong giỏ hàng theo cartId
+@PostMapping( "/checkout")
+@PreAuthorize("hasAuthority('Customer')")
+public ResponseEntity<?> checkoutCart(
+        @RequestParam PaymentMethodEnum paymentMethod,
+        @RequestParam Integer cartId,
+        @RequestParam(required = false) Integer shippingAddressId,
+        @RequestParam(required = false) String notes) {
+    try {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        Integer userId = userService.getUserIdFromAuthentication(authentication);
+
+        Map<String, Object> result = checkoutService.checkoutCart(userId, cartId, paymentMethod, shippingAddressId, notes);
+
+        boolean success = (Boolean) result.get("success");
+        if (success) {
+            return ResponseEntity.ok(result);
+        } else {
+            return ResponseEntity.badRequest().body(result);
         }
-    }    // Xử lý sau khi thanh toán MoMo thành công/thất bại (callback từ MoMo)
+    } catch (Exception e) {
+        return handleException("Lỗi khi thanh toán giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+
     @PostMapping("/momo/callback")
     public ResponseEntity<?> handleMomoCallback(@RequestParam Map<String, String> response) {
         try {
@@ -266,18 +274,17 @@ public class CartItemController {
     @PreAuthorize("hasAuthority('Customer')")
     public ResponseEntity<?> cleanupUnavailableProducts(@PathVariable Integer userId) {
         try {
-            int removedCount = cartItemService.cleanupUnavailableProducts(userId);
-            
+            int unavailableCount = cartItemService.countUnavailableProductsInCart(userId);
             Map<String, Object> response = new HashMap<>();
-            response.put("message", removedCount > 0 ? 
-                "Đã xóa " + removedCount + " sản phẩm không khả dụng khỏi giỏ hàng" : 
-                "Không có sản phẩm nào cần xóa");            response.put("success", true);
-            response.put("removedCount", removedCount);
+            response.put("message", unavailableCount > 0 ?
+                "Có " + unavailableCount + " sản phẩm không khả dụng trong giỏ hàng" :
+                "Không có sản phẩm nào không khả dụng");
+            response.put("success", true);
+            response.put("unavailableCount", unavailableCount);
             response.put("userId", userId);
-            
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            return handleException("Lỗi khi dọn dẹp giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            return handleException("Lỗi khi kiểm tra sản phẩm không khả dụng", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 }

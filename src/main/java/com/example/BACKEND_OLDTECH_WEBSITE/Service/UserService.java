@@ -896,4 +896,293 @@ public class UserService implements UserDetailsService {
             log.info("Sent verification request notification to admin ID: {}", admin.getUserId());
         }
     }
+
+
+    /*---ADMIN SELLER FILTERING METHODS---*/    /**
+     * Lọc người bán với nhiều tiêu chí - sử dụng Repository query để tối ưu hiệu suất
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> filterSellers(String accountStatus, String businessStatus, Boolean isVerified,
+                                           String startDate, String endDate, String searchKeyword, 
+                                           String momoAccount, Boolean strictMode) {
+        
+        Map<String, Object> appliedFilters = new HashMap<>();
+        List<String> filterSteps = new ArrayList<>();
+        int originalCount = userRepository.findByRole(RoleEnum.Seller).size();
+        
+        try {
+            // Prepare filter parameters for repository query
+            AccountStatusEnum accountStatusEnum = null;
+            if (isValidFilterValue(accountStatus)) {
+                try {
+                    accountStatusEnum = AccountStatusEnum.valueOf(accountStatus.toUpperCase().trim());
+                    appliedFilters.put("accountStatus", accountStatus.toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    if (strictMode) {
+                        throw new IllegalArgumentException("Trạng thái tài khoản không hợp lệ: " + accountStatus);
+                    }
+                    appliedFilters.put("accountStatus", "IGNORED (không hợp lệ: " + accountStatus + ")");
+                }
+            }
+
+            // Parse date parameters
+            java.time.LocalDateTime startDateTime = null;
+            java.time.LocalDateTime endDateTime = null;
+            
+            if (isValidFilterValue(startDate)) {
+                try {
+                    startDateTime = java.time.LocalDate.parse(startDate).atStartOfDay();
+                    appliedFilters.put("startDate", startDate);
+                } catch (Exception e) {
+                    if (strictMode) {
+                        throw new IllegalArgumentException("Định dạng ngày bắt đầu không hợp lệ: " + startDate);
+                    }
+                    appliedFilters.put("startDate", "IGNORED (định dạng không hợp lệ: " + startDate + ")");
+                }
+            }
+            
+            if (isValidFilterValue(endDate)) {
+                try {
+                    endDateTime = java.time.LocalDate.parse(endDate).atTime(23, 59, 59);
+                    appliedFilters.put("endDate", endDate);
+                } catch (Exception e) {
+                    if (strictMode) {
+                        throw new IllegalArgumentException("Định dạng ngày kết thúc không hợp lệ: " + endDate);
+                    }
+                    appliedFilters.put("endDate", "IGNORED (định dạng không hợp lệ: " + endDate + ")");
+                }
+            }
+
+            // Validate and prepare search keyword
+            String validSearchKeyword = null;
+            if (isValidFilterValue(searchKeyword)) {
+                validSearchKeyword = searchKeyword.trim();
+                appliedFilters.put("searchKeyword", searchKeyword);
+            }
+
+            // Validate and prepare momo account
+            String validMomoAccount = null;
+            if (isValidFilterValue(momoAccount)) {
+                validMomoAccount = momoAccount.trim();
+                appliedFilters.put("momoAccount", momoAccount);
+            }
+
+            // Execute optimized repository query with all filters
+            List<User> sellers = userRepository.findSellersWithFilters(
+                RoleEnum.Seller,
+                accountStatusEnum,
+                isVerified,
+                startDateTime,
+                endDateTime,
+                validSearchKeyword,
+                validMomoAccount
+            );
+
+            // Handle business status filtering (requires join with Seller table)
+            if (isValidFilterValue(businessStatus)) {
+                boolean targetBusinessStatus = "active".equalsIgnoreCase(businessStatus) || 
+                                             "1".equals(businessStatus) || 
+                                             "true".equalsIgnoreCase(businessStatus);                // Get all seller business statuses in one query
+                List<Seller> sellerEntities = sellerRepository.findAll();
+                Map<Integer, Boolean> businessStatusMap = new HashMap<>();
+                for (Seller s : sellerEntities) {
+                    businessStatusMap.put(s.getSellerId(), s.getBusinessStatus() != null && s.getBusinessStatus());
+                }
+
+                sellers = sellers.stream()
+                        .filter(seller -> {
+                            Boolean status = businessStatusMap.get(seller.getUserId());
+                            return status != null && status.equals(targetBusinessStatus);
+                        })
+                        .collect(java.util.stream.Collectors.toList());
+                
+                appliedFilters.put("businessStatus", businessStatus);
+                filterSteps.add("Lọc theo trạng thái kinh doanh '" + businessStatus + "': " + sellers.size() + " người bán");
+            }
+
+            // Build filter steps for logging
+            if (isValidFilterValue(accountStatus) && accountStatusEnum != null) {
+                filterSteps.add("Lọc theo trạng thái tài khoản '" + accountStatus.toUpperCase() + "'");
+            }
+            if (isVerified != null) {
+                filterSteps.add("Lọc theo trạng thái xác thực '" + (isVerified ? "Đã xác thực" : "Chưa xác thực") + "'");
+            }
+            if (startDateTime != null) {
+                filterSteps.add("Lọc từ ngày " + startDate);
+            }
+            if (endDateTime != null) {
+                filterSteps.add("Lọc đến ngày " + endDate);
+            }
+            if (validSearchKeyword != null) {
+                filterSteps.add("Tìm kiếm từ khóa '" + searchKeyword + "'");
+            }
+            if (validMomoAccount != null) {
+                filterSteps.add("Lọc theo tài khoản MoMo '" + momoAccount + "'");
+            }
+
+        } catch (Exception e) {
+            log.error("Error during seller filtering: {}", e.getMessage(), e);
+            throw new RuntimeException("Lỗi khi lọc người bán: " + e.getMessage());
+        }
+
+        // Build final response
+        List<User> finalSellers = userRepository.findSellersWithFilters(
+            RoleEnum.Seller,
+            appliedFilters.containsKey("accountStatus") && !appliedFilters.get("accountStatus").toString().startsWith("IGNORED") 
+                ? AccountStatusEnum.valueOf(accountStatus.toUpperCase().trim()) : null,
+            isVerified,
+            appliedFilters.containsKey("startDate") && !appliedFilters.get("startDate").toString().startsWith("IGNORED")
+                ? java.time.LocalDate.parse(startDate).atStartOfDay() : null,
+            appliedFilters.containsKey("endDate") && !appliedFilters.get("endDate").toString().startsWith("IGNORED")
+                ? java.time.LocalDate.parse(endDate).atTime(23, 59, 59) : null,
+            appliedFilters.containsKey("searchKeyword") ? searchKeyword.trim() : null,
+            appliedFilters.containsKey("momoAccount") ? momoAccount.trim() : null
+        );
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("sellers", finalSellers);
+        response.put("totalCount", finalSellers.size());
+        response.put("originalCount", originalCount);
+        response.put("appliedFilters", appliedFilters);
+        response.put("filterSteps", filterSteps);
+        response.put("hasFilters", !appliedFilters.isEmpty());
+
+        log.info("Seller filtering completed. Original: {}, Filtered: {}, Filters: {}", 
+                originalCount, finalSellers.size(), appliedFilters.keySet());
+
+        return response;
+    }
+
+    /**
+     * Helper method để validate filter values
+     */
+    private boolean isValidFilterValue(String value) {
+        return value != null && !value.trim().isEmpty() && 
+               !value.trim().equalsIgnoreCase("null") && 
+               !value.trim().equalsIgnoreCase("undefined");
+    }
+
+    /**
+     * Lấy tất cả người bán
+     */
+    @Transactional(readOnly = true)
+    public List<User> getAllSellers() {
+        return userRepository.findByRole(RoleEnum.Seller);
+    }    /**
+     * Lấy danh sách người bán đang chờ xác thực - sử dụng query tối ưu
+     */
+    @Transactional(readOnly = true)
+    public List<User> getPendingVerificationSellers() {
+        return userRepository.findPendingVerificationSellers();
+    }    /**
+     * Lọc người bán theo trạng thái tài khoản - với error handling cải thiện
+     */
+    @Transactional(readOnly = true)
+    public List<User> getSellersByAccountStatus(String status) {
+        try {
+            AccountStatusEnum statusEnum = AccountStatusEnum.valueOf(status.toUpperCase().trim());
+            return userRepository.findByRoleAndAccountStatus(RoleEnum.Seller, statusEnum);
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid account status provided: {}", status);
+            return new ArrayList<>();
+        }
+    }/**
+     * Tìm kiếm người bán theo từ khóa - sử dụng query tối ưu với enhanced search
+     */
+    @Transactional(readOnly = true)
+    public List<User> searchSellers(String keyword) {
+        if (!isValidFilterValue(keyword)) {
+            return userRepository.findByRole(RoleEnum.Seller);
+        }
+        
+        return userRepository.findSellersWithEnhancedSearch(keyword.trim());
+    }
+
+    /**
+     * Lấy thống kê người bán
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getSellerStatistics() {
+        List<User> allSellers = getAllSellers();
+          Map<String, Object> stats = new HashMap<>();
+        
+        // Thống kê cơ bản sử dụng repository count queries tối ưu
+        Long totalSellers = userRepository.countByRole(RoleEnum.Seller);
+        Long activeSellers = userRepository.countByRoleAndAccountStatus(RoleEnum.Seller, AccountStatusEnum.Active);
+        Long inactiveSellers = userRepository.countByRoleAndAccountStatus(RoleEnum.Seller, AccountStatusEnum.Inactive);
+        Long suspendedSellers = userRepository.countByRoleAndAccountStatus(RoleEnum.Seller, AccountStatusEnum.Suspended);
+        Long verifiedSellers = userRepository.countByRoleAndIsVerified(RoleEnum.Seller, true);
+        Long unverifiedSellers = userRepository.countByRoleAndIsVerified(RoleEnum.Seller, false);
+        
+        stats.put("totalSellers", totalSellers);
+        stats.put("activeSellers", activeSellers);
+        stats.put("inactiveSellers", inactiveSellers);
+        stats.put("suspendedSellers", suspendedSellers);
+        stats.put("verifiedSellers", verifiedSellers);
+        stats.put("unverifiedSellers", unverifiedSellers);
+        
+        // Thống kê theo trạng thái tài khoản (detailed breakdown)
+        Map<String, Long> statusBreakdown = new HashMap<>();
+        statusBreakdown.put("ACTIVE", activeSellers);
+        statusBreakdown.put("INACTIVE", inactiveSellers);
+        statusBreakdown.put("SUSPENDED", suspendedSellers);
+        stats.put("byAccountStatus", statusBreakdown);
+          // Thống kê theo trạng thái kinh doanh
+        List<Seller> sellerEntities = sellerRepository.findAll();
+        long activeBusinessCount = sellerEntities.stream()
+                .mapToLong(seller -> seller.getBusinessStatus() != null && seller.getBusinessStatus() ? 1 : 0)
+                .sum();
+        stats.put("activeBusinessCount", activeBusinessCount);
+        stats.put("inactiveBusinessCount", sellerEntities.size() - activeBusinessCount);
+        
+        // Thống kê theo thời gian tạo (30 ngày gần đây)
+        java.sql.Timestamp thirtyDaysAgo = new java.sql.Timestamp(System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000));
+        long recentSellers = allSellers.stream()
+                .mapToLong(seller -> seller.getCreatedAt().after(thirtyDaysAgo) ? 1 : 0)
+                .sum();
+        stats.put("newSellersLast30Days", recentSellers);
+        
+        return stats;
+    }
+
+    /**
+     * Cập nhật trạng thái kinh doanh của người bán
+     */
+    @Transactional
+    public User updateSellerBusinessStatus(Integer sellerId, Boolean isActive) {
+        User user = getUserById(sellerId);
+        
+        if (user.getRole() != RoleEnum.Seller) {
+            throw new IllegalArgumentException("Người dùng không phải là người bán");
+        }
+          // Tìm Seller entity
+        Optional<Seller> sellerOpt = sellerRepository.findBySellerId(sellerId);
+        if (sellerOpt.isEmpty()) {
+            throw new EntityNotFoundException("Không tìm thấy thông tin người bán với ID: " + sellerId);
+        }
+          Seller seller = sellerOpt.get();
+        seller.setBusinessStatus(isActive);
+        seller.setUpdatedAt(new Timestamp(System.currentTimeMillis()));
+        sellerRepository.save(seller);
+        
+        log.info("Updated business status for seller ID: {} to: {}", sellerId, isActive ? "Active" : "Inactive");
+        
+        return user;
+    }
+
+    /**
+     * Extract userId from Authentication object (JWT principal)
+     */
+    public Integer getUserIdFromAuthentication(org.springframework.security.core.Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            throw new EntityNotFoundException("Không thể xác định người dùng từ Authentication");
+        }
+        String email = authentication.getName();
+        Optional<User> userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            throw new EntityNotFoundException("Không tìm thấy người dùng với email: " + email);
+        }
+        return userOpt.get().getUserId();
+    }
+
 }

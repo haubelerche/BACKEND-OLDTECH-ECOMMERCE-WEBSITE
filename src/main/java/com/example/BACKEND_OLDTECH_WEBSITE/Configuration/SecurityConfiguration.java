@@ -52,8 +52,9 @@ public class SecurityConfiguration {
                     "/oldtech/login/oauth2/code/*",
                     "/oldtech/public/**",
                     "/oldtech/facebook/debug/**",
-                    "/oldtech/manager/superadmins"
-
+                    "/oldtech/manager/superadmins",
+                    "/oldtech/products/**",
+                    "/products/**" // Thêm dòng này để public luôn cả /products/filter
                 ).permitAll()
 
 
@@ -72,7 +73,9 @@ public class SecurityConfiguration {
                             "/oldtech/etl/seller-dashboard-etl/**"
                     ).hasAnyAuthority("Admin", "SuperAdmin")
 
-                .requestMatchers( "/oldtech/reviews/**","/oldtech/addresses/**","/oldtech/orders/**" )
+                .requestMatchers( "/oldtech/reviews/**","/oldtech/addresses/**","/oldtech/orders/**", "/oldtech/cart/**"
+
+                            )
                 .hasAnyAuthority("Customer")
 
 

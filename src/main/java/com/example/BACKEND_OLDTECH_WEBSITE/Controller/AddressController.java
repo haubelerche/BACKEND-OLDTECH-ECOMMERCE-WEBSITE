@@ -40,8 +40,14 @@ public class AddressController {
 
     //ok
     @GetMapping("/list")
-    public ResponseEntity<?> getAllAddresses(@RequestParam Integer userId) {
+    public ResponseEntity<?> getAllAddresses() {
         try {
+            User currentUser = getCurrentAuthenticatedUser();
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Người dùng chưa đăng nhập hoặc token không hợp lệ");
+            }
+            Integer userId = currentUser.getUserId();
             logger.info("Getting all addresses for user ID: {}", userId);
             List<Address> addresses = addressService.getAllAddressesByUserId(userId);
             List<AddressResponse> response = addresses.stream()
@@ -50,34 +56,40 @@ public class AddressController {
             logger.info("Retrieved {} addresses for user ID: {}", addresses.size(), userId);
             return ResponseEntity.ok(response);
         } catch (EntityNotFoundException e) {
-            logger.error("User not found with ID: {}", userId, e);
+            logger.error("User not found: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {
-            logger.error("Error retrieving addresses for user ID: {}", userId, e);
+            logger.error("Error retrieving addresses: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi khi lấy danh sách địa chỉ: " + e.getMessage());
         }
     }
 
     /**
-     * Get a specific address by userId
+     * Get a specific address by addressId for the current user
      */
     @GetMapping("/get/{addressId}")
-    public ResponseEntity<?> getAddressById(@PathVariable Integer addressId, @RequestParam Integer userId) {
+    public ResponseEntity<?> getAddressById(@PathVariable Integer addressId) {
         try {
+            User currentUser = getCurrentAuthenticatedUser();
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Người dùng chưa đăng nhập hoặc token không hợp lệ");
+            }
+            Integer userId = currentUser.getUserId();
             logger.info("Getting address ID: {} for user ID: {}", addressId, userId);
             Address address = addressService.getAddressById(addressId, userId);
             AddressResponse response = convertToAddressResponse(address);
             logger.info("Successfully retrieved address ID: {} for user ID: {}", addressId, userId);
             return ResponseEntity.ok(response);
         } catch (EntityNotFoundException e) {
-            logger.error("Address not found with ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Address not found with ID: {}: {}", addressId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
-            logger.error("Unauthorized access to address ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Unauthorized access to address ID: {}: {}", addressId, e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
-            logger.error("Error retrieving address ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Error retrieving address ID: {}: {}", addressId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi khi lấy thông tin địa chỉ: " + e.getMessage());
         }
@@ -88,21 +100,27 @@ public class AddressController {
      */
     //ok
     @PostMapping("/create")
-    public ResponseEntity<?> createAddress(@Valid @RequestBody AddressRequest addressRequest, @RequestParam Integer userId) {
+    public ResponseEntity<?> createAddress(@Valid @RequestBody AddressRequest addressRequest) {
         try {
+            User currentUser = getCurrentAuthenticatedUser();
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Người dùng chưa đăng nhập hoặc token không hợp lệ");
+            }
+            Integer userId = currentUser.getUserId();
             logger.info("Creating address for userId: {} with request: {}", userId, addressRequest);
             Address savedAddress = addressService.createAddress(addressRequest, userId);
             AddressResponse response = convertToAddressResponse(savedAddress);
             logger.info("Address created successfully for user ID: {}, address ID: {}", userId, savedAddress.getAddressId());
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (EntityNotFoundException e) {
-            logger.error("Entity not found for user ID: {}: {}", userId, e.getMessage());
+            logger.error("Entity not found: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (IllegalArgumentException e) {
-            logger.error("Invalid argument for user ID: {}: {}", userId, e.getMessage());
+            logger.error("Invalid argument: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid request: " + e.getMessage());
         } catch (Exception e) {
-            logger.error("Error creating address for user ID: {}: {}", userId, e.getMessage(), e);
+            logger.error("Error creating address: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi khi tạo địa chỉ mới: " + e.getMessage());
         }
@@ -114,22 +132,26 @@ public class AddressController {
     //ok
     @PutMapping("/{addressId}")
     public ResponseEntity<?> updateAddress(@PathVariable Integer addressId,
-                                          @Valid @RequestBody AddressRequest addressRequest,
-                                          @RequestParam Integer userId) {
+                                          @Valid @RequestBody AddressRequest addressRequest) {
         try {
-            logger.info("Updating address ID: {} for user ID: {} with request: {}", addressId, userId, addressRequest);
+            User currentUser = getCurrentAuthenticatedUser();
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Người dùng chưa đăng nhập hoặc token không hợp lệ");
+            }
+            Integer userId = currentUser.getUserId();
             Address updatedAddress = addressService.updateAddress(addressId, addressRequest, userId);
             AddressResponse response = convertToAddressResponse(updatedAddress);
             logger.info("Address updated successfully for user ID: {}, address ID: {}", userId, addressId);
             return ResponseEntity.ok(response);
         } catch (EntityNotFoundException e) {
-            logger.error("Address not found with ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Address not found with ID: {}: {}", addressId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
-            logger.error("Unauthorized access to update address ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Unauthorized access to update address ID: {}: {}", addressId, e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
-            logger.error("Error updating address ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Error updating address ID: {}: {}", addressId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi khi cập nhật địa chỉ: " + e.getMessage());
         }
@@ -139,8 +161,14 @@ public class AddressController {
      * Delete an address
      */
     @DeleteMapping("/{addressId}")
-    public ResponseEntity<?> deleteAddress(@PathVariable Integer addressId, @RequestParam Integer userId) {
+    public ResponseEntity<?> deleteAddress(@PathVariable Integer addressId) {
         try {
+            User currentUser = getCurrentAuthenticatedUser();
+            if (currentUser == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("Người dùng chưa đăng nhập hoặc token không hợp lệ");
+            }
+            Integer userId = currentUser.getUserId();
             logger.info("Deleting address ID: {} for user ID: {}", addressId, userId);
             addressService.deleteAddress(addressId, userId);
             logger.info("Address deleted successfully for user ID: {}, address ID: {}", userId, addressId);
@@ -148,13 +176,13 @@ public class AddressController {
                     java.util.Map.of("message", "Địa chỉ đã được xóa thành công")
             );
         } catch (EntityNotFoundException e) {
-            logger.error("Address not found with ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Address not found with ID: {}: {}", addressId, e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (SecurityException e) {
-            logger.error("Unauthorized access to delete address ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Unauthorized access to delete address ID: {}: {}", addressId, e.getMessage());
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
         } catch (Exception e) {
-            logger.error("Error deleting address ID: {} for user ID: {}", addressId, userId, e);
+            logger.error("Error deleting address ID: {}: {}", addressId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Lỗi khi xóa địa chỉ: " + e.getMessage());
         }

@@ -8,6 +8,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.DTO.User.ChangePasswordRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import jakarta.persistence.EntityNotFoundException;
@@ -312,4 +313,145 @@ public class UserController {
 
 
 
+
+
+
+
+
+
+
+    
+
+
+    /*---ADMIN SELLER FILTERING OPERATIONS---*/
+
+    /**
+     * Lọc người bán với nhiều tiêu chí (Admin only)
+     */
+    @GetMapping("/sellers/filter")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> filterSellers(
+            @RequestParam(required = false) String accountStatus,
+            @RequestParam(required = false) String businessStatus,
+            @RequestParam(required = false) Boolean isVerified,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
+            @RequestParam(required = false) String searchKeyword,
+            @RequestParam(required = false) String momoAccount,
+            @RequestParam(required = false, defaultValue = "false") Boolean strictMode) {
+        try {
+            Map<String, Object> response = userService.filterSellers(
+                accountStatus, businessStatus, isVerified, startDate, endDate, 
+                searchKeyword, momoAccount, strictMode
+            );
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Lỗi khi lọc người bán: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
     }
+
+    /**
+     * Lấy danh sách tất cả người bán (Admin only)
+     */
+    @GetMapping("/sellers/all")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> getAllSellers() {
+        try {
+            List<User> sellers = userService.getAllSellers();
+            return ResponseEntity.ok(sellers);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Lỗi khi lấy danh sách người bán: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Lấy danh sách người bán đang chờ xác thực (Admin only)
+     */
+    @GetMapping("/sellers/pending")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> getPendingVerificationSellers() {
+        try {
+            List<User> pendingSellers = userService.getPendingVerificationSellers();
+            return ResponseEntity.ok(pendingSellers);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Lỗi khi lấy danh sách người bán chờ xác thực: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Lọc người bán theo trạng thái tài khoản (Admin only)
+     */
+    @GetMapping("/sellers/status/{status}")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> getSellersByAccountStatus(@PathVariable String status) {
+        try {
+            List<User> sellers = userService.getSellersByAccountStatus(status);
+            return ResponseEntity.ok(sellers);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Lỗi khi lọc người bán theo trạng thái: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Tìm kiếm người bán theo từ khóa (Admin only)
+     */
+    @GetMapping("/sellers/search")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> searchSellers(@RequestParam String keyword) {
+        try {
+            List<User> sellers = userService.searchSellers(keyword);
+            return ResponseEntity.ok(sellers);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Lỗi khi tìm kiếm người bán: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Lấy thống kê người bán (Admin only)
+     */
+    @GetMapping("/sellers/statistics")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> getSellerStatistics() {
+        try {
+            Map<String, Object> statistics = userService.getSellerStatistics();
+            return ResponseEntity.ok(statistics);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("Lỗi khi lấy thống kê người bán: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Cập nhật trạng thái kinh doanh của người bán (Admin only)
+     */
+    @PutMapping("/sellers/{sellerId}/business-status")
+    @PreAuthorize("hasAuthority('Admin') or hasAuthority('SuperAdmin')")
+    public ResponseEntity<?> updateSellerBusinessStatus(
+            @PathVariable Integer sellerId, 
+            @RequestParam Boolean isActive) {
+        try {
+            User updatedSeller = userService.updateSellerBusinessStatus(sellerId, isActive);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Trạng thái kinh doanh đã được cập nhật");
+            response.put("sellerId", sellerId);
+            response.put("businessStatus", isActive ? "Hoạt động" : "Tạm ngưng");
+            response.put("seller", updatedSeller);
+            return ResponseEntity.ok(response);
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("success", false, "message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("success", false, "message", "Lỗi khi cập nhật trạng thái: " + e.getMessage()));
+        }
+    }
+
+}
