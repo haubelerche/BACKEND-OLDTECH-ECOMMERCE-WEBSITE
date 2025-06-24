@@ -322,6 +322,7 @@ public class ProductController {
         }
     }
 
+
     /**
      * Get products with sorting and filtering options
      */
@@ -491,50 +492,7 @@ public class ProductController {
         }
     }
 
-    /**
-     * Reject multiple products in batch
-     * Also removes all rejected products from all users' carts
-     */
-    @PutMapping("/batch/reject")
-    @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
-    public ResponseEntity<?> rejectMultipleProducts(@RequestBody List<Integer> productIds) {
-        try {
-            if (productIds == null || productIds.isEmpty()) {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("success", false, "message", "Danh sách ID sản phẩm không được trống"));
-            }
-            
-            // Validate all IDs
-            boolean hasInvalidId = productIds.stream().anyMatch(id -> id == null || id <= 0);
-            if (hasInvalidId) {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("success", false, "message", "Có ID sản phẩm không hợp lệ trong danh sách"));
-            }
-            
-            logger.info("Admin rejecting {} products", productIds.size());
-            productService.rejectMultipleProducts(productIds);
-            
-            // Remove all rejected products from carts
-            int totalRemovedFromCarts = 0;
-            for (Integer productId : productIds) {
-                totalRemovedFromCarts += removeProductFromAllCarts(productId);
-            }
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Đã từ chối " + productIds.size() + " sản phẩm và xóa khỏi giỏ hàng của người dùng");
-            response.put("rejectedCount", productIds.size());
-            response.put("productIds", productIds);
-            response.put("removedFromCartsCount", totalRemovedFromCarts);
-            
-            logger.info("Rejected {} products and removed them from {} total cart entries", productIds.size(), totalRemovedFromCarts);
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error rejecting multiple products: {}", e.getMessage(), e);
-            return handleException("Lỗi khi từ chối nhiều sản phẩm", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+
 
 
 
