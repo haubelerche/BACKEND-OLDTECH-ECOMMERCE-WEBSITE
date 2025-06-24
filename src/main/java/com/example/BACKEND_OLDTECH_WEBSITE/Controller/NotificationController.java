@@ -5,6 +5,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Notification.NotificationResponse
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Notification.NotificationStatsResponse;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Notification;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.NotificationService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -27,6 +29,9 @@ public class NotificationController {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private UserService userService;
 
     /*--- USER OPERATIONS ---*/
 
@@ -139,50 +144,38 @@ public class NotificationController {
         }
     }
 
-    /**
-     * Lấy thống kê thông báo của người dùng hiện tại
-     */
-    @GetMapping("/my/stats")
-    public ResponseEntity<Map<String, Object>> getMyNotificationStats() {
-        try {
-            Integer userId = getCurrentUserId();
-            NotificationStatsResponse stats = notificationService.getUserNotificationStats(userId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("data", stats);
-            response.put("message", "Lấy thống kê thông báo thành công");
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error getting notification stats: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "Lỗi khi lấy thống kê thông báo: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
 
     /*--- Admin OPERATIONS ---*/
 
     /**
-     * Gửi thông báo đến một người dùng cụ thể (Admin only)
+     * Gửi thông báo đến một người dùng cụ thể hoac tat ca cac nguoi dung
      */
     @PostMapping("/send/user/{userId}")
     @PreAuthorize("hasAuthority('Admin')")
     public ResponseEntity<Map<String, Object>> sendNotificationToUser(
             @PathVariable Integer userId,
-            @RequestBody CreateNotificationRequest request) {
+            @RequestBody Map<String, Object> requestBody) {
         try {
+            // Nếu sendToAll=true thì gửi cho tất cả
+            if (requestBody.containsKey("sendToAll") && Boolean.TRUE.equals(requestBody.get("sendToAll"))) {
+                CreateNotificationRequest request = mapToCreateNotificationRequest(requestBody);
+                String senderInfo = "Admin - " + getCurrentUserEmail();
+                List<Notification> notifications = notificationService.createNotificationForAllUsers(request, senderInfo);
+                Map<String, Object> response = new HashMap<>();
+                response.put("status", "success");
+                response.put("sentCount", notifications.size());
+                response.put("message", String.format("Đã gửi thông báo đến %d người dùng", notifications.size()));
+                return ResponseEntity.ok(response);
+            }
+            // Gửi cho 1 user cụ thể
+            CreateNotificationRequest request = mapToCreateNotificationRequest(requestBody);
             String senderInfo = "Admin - " + getCurrentUserEmail();
             Notification notification = notificationService.createNotificationForUser(userId, request, senderInfo);
-            
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             response.put("notificationId", notification.getId());
             response.put("recipientId", userId);
             response.put("message", "Đã gửi thông báo đến người dùng thành công");
-            
             return ResponseEntity.ok(response);
         } catch (EntityNotFoundException e) {
             Map<String, Object> errorResponse = new HashMap<>();
@@ -199,38 +192,6 @@ public class NotificationController {
     }
 
     /**
-     * Gửi thông báo đến nhiều người dùng (Admin only)
-     */
-    @PostMapping("/send/users")
-    @PreAuthorize("hasAuthority('Admin')")
-    public ResponseEntity<Map<String, Object>> sendNotificationToUsers(
-            @RequestBody Map<String, Object> requestBody) {
-        try {
-            @SuppressWarnings("unchecked")
-            List<Integer> userIds = (List<Integer>) requestBody.get("userIds");
-            CreateNotificationRequest request = mapToCreateNotificationRequest(requestBody);
-            
-            String senderInfo = "Admin - " + getCurrentUserEmail();
-            List<Notification> notifications = notificationService.createNotificationForUsers(userIds, request, senderInfo);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("sentCount", notifications.size());
-            response.put("requestedCount", userIds.size());
-            response.put("message", String.format("Đã gửi thông báo đến %d/%d người dùng", 
-                notifications.size(), userIds.size()));
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error sending notification to multiple users: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "Lỗi khi gửi thông báo đến nhiều người dùng: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
-
-    /**
      * Gửi thông báo đến tất cả người dùng (Admin only)
      */
     @PostMapping("/send/all")
@@ -240,12 +201,12 @@ public class NotificationController {
         try {
             String senderInfo = "Admin - " + getCurrentUserEmail();
             List<Notification> notifications = notificationService.createNotificationForAllUsers(request, senderInfo);
-            
+
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             response.put("sentCount", notifications.size());
             response.put("message", String.format("Đã gửi thông báo đến %d người dùng", notifications.size()));
-            
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error sending notification to all users: ", e);
@@ -256,127 +217,14 @@ public class NotificationController {
         }
     }
 
-    /**
-     * Gửi thông báo đến người dùng theo vai trò (Admin only)
-     */
-    @PostMapping("/send/roles")
-    @PreAuthorize("hasAuthority('Admin')")
-    public ResponseEntity<Map<String, Object>> sendNotificationToUsersByRoles(
-            @RequestBody Map<String, Object> requestBody) {
-        try {
-            @SuppressWarnings("unchecked")
-            List<String> roles = (List<String>) requestBody.get("roles");
-            CreateNotificationRequest request = mapToCreateNotificationRequest(requestBody);
-            
-            String senderInfo = "Admin - " + getCurrentUserEmail();
-            List<Notification> notifications = notificationService.createNotificationForUsersByRoles(roles, request, senderInfo);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("sentCount", notifications.size());
-            response.put("targetRoles", roles);
-            response.put("message", String.format("Đã gửi thông báo đến %d người dùng với vai trò: %s", 
-                notifications.size(), String.join(", ", roles)));
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error sending notification by roles: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "Lỗi khi gửi thông báo theo vai trò: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
 
-    /*--- AUTOMATIC NOTIFICATIONS ---*/
 
-    /**
-     * Gửi thông báo nhắc nhở hoàn thành hồ sơ (Admin only hoặc System)
-     */
-    @PostMapping("/send/profile-reminder/{userId}")
-    @PreAuthorize("hasAuthority('Admin')")
-    public ResponseEntity<Map<String, Object>> sendProfileCompletionReminder(@PathVariable Integer userId) {
-        try {
-            Notification notification = notificationService.sendProfileCompletionReminder(userId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("notificationId", notification.getId());
-            response.put("message", "Đã gửi thông báo nhắc nhở hoàn thành hồ sơ");
-            
-            return ResponseEntity.ok(response);
-        } catch (EntityNotFoundException e) {
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "Không tìm thấy người dùng");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
-        } catch (Exception e) {
-            logger.error("Error sending profile completion reminder: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "Lỗi khi gửi thông báo nhắc nhở: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
 
-    /**
-     * Gửi thông báo xác minh tài khoản (Admin only)
-     */
-    @PostMapping("/send/verification/{userId}")
-    @PreAuthorize("hasAuthority('Admin')")
-    public ResponseEntity<Map<String, Object>> sendAccountVerificationNotification(
-            @PathVariable Integer userId,
-            @RequestParam boolean approved) {
-        try {
-            Notification notification = notificationService.sendAccountVerificationNotification(userId, approved);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("notificationId", notification.getId());
-            response.put("approved", approved);
-            response.put("message", approved ? 
-                "Đã gửi thông báo xác minh thành công" : 
-                "Đã gửi thông báo từ chối xác minh");
-            
-            return ResponseEntity.ok(response);
-        } catch (EntityNotFoundException e) {
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "Không tìm thấy người dùng");
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
-        } catch (Exception e) {
-            logger.error("Error sending verification notification: ", e);
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", "Lỗi khi gửi thông báo xác minh: " + e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
-        }
-    }
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
+
+
 
     /*--- HELPER METHODS ---*/
 
@@ -388,12 +236,26 @@ public class NotificationController {
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new SecurityException("Người dùng chưa đăng nhập");
         }
-        
         Object principal = authentication.getPrincipal();
         if (principal instanceof com.example.BACKEND_OLDTECH_WEBSITE.Model.User) {
             return ((com.example.BACKEND_OLDTECH_WEBSITE.Model.User) principal).getUserId();
         }
-        
+        // Nếu principal là UserDetails (Spring Security), lấy username/email
+        if (principal instanceof UserDetails) {
+            String username = ((UserDetails) principal).getUsername();
+            com.example.BACKEND_OLDTECH_WEBSITE.Model.User user = userService.findUserByEmail(username);
+            if (user != null) {
+                return user.getUserId();
+            }
+        }
+        // Nếu principal là String (username/email), lấy user từ userService
+        if (principal instanceof String) {
+            String email = (String) principal;
+            com.example.BACKEND_OLDTECH_WEBSITE.Model.User user = userService.findUserByEmail(email);
+            if (user != null) {
+                return user.getUserId();
+            }
+        }
         throw new SecurityException("Không thể xác định người dùng hiện tại");
     }
 

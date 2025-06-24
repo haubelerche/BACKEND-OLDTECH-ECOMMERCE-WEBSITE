@@ -29,8 +29,8 @@ public class ComplaintController {
     @Autowired
     private ComplaintService complaintService;
 
-    /*--USER OPERATIONS--*/    /**
-     * Submit a new complaint
+    /*--USER --*/    /**
+     * TẠO RA KHIẾU NẠI
      */
     @PostMapping("/submit")
     @PreAuthorize("hasAnyAuthority('Customer', 'Seller')")
@@ -57,8 +57,16 @@ public class ComplaintController {
             logger.error("Error submitting complaint: {}", e.getMessage(), e);
             return handleException("Lỗi khi gửi khiếu nại", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }    /**
-     * Get all complaints with filtering (Admin only)
+    }
+
+
+
+
+
+
+    /*--ADMIN --*/
+    /**
+     * LẤY DANH SÁCH KHIẾU NẠI
      */
     @GetMapping("/admin/all")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
@@ -85,63 +93,41 @@ public class ComplaintController {
         }
     }
 
+
     /**
-     * Get pending complaints for admin dashboard
+     * TRẢ LOI TÂM THƯ :))
      */
-    @GetMapping("/admin/pending")
+
+    /**
+     * Get complaint details (Admin only for now, simplified)
+     */
+    @GetMapping("/{complaintId}")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
-    public ResponseEntity<?> getPendingComplaints() {
+    public ResponseEntity<?> getComplaintDetails(@PathVariable Long complaintId) {
         try {
-            logger.info("Admin getting pending complaints");
-            
-            List<ComplaintResponse> complaints = complaintService.getPendingComplaints();
-            
+            ComplaintResponse complaint = complaintService.getComplaintById(complaintId);
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("message", "Lấy danh sách khiếu nại chờ xử lý thành công");
-            response.put("complaints", complaints);
-            response.put("totalCount", complaints.size());
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error getting pending complaints: {}", e.getMessage(), e);
-            return handleException("Lỗi khi lấy danh sách khiếu nại chờ xử lý", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }    /**
-     * Start reviewing a complaint (Admin only)
-     */
-    @PutMapping("/{complaintId}/start-review")
-    @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
-    public ResponseEntity<?> startReview(@PathVariable Long complaintId) {
-        try {
-            logger.info("Admin starting review for complaint {}", complaintId);
-            
-            complaintService.startReview(complaintId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Đã bắt đầu xem xét khiếu nại");
-            response.put("complaintId", complaintId);
-            response.put("status", "Reviewing");
-            
+            response.put("message", "Lấy thông tin khiếu nại thành công");
+            response.put("complaint", complaint);
+
             return ResponseEntity.ok(response);
         } catch (EntityNotFoundException e) {
-            logger.error("Entity not found when starting review: {}", e.getMessage());
+            logger.error("Complaint not found: {}", e.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("success", false, "message", e.getMessage()));
-        } catch (IllegalStateException e) {
-            logger.error("Invalid state when starting review: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("success", false, "message", e.getMessage()));
+                    .body(Map.of("success", false, "message", e.getMessage()));
         } catch (Exception e) {
-            logger.error("Error starting review: {}", e.getMessage(), e);
-            return handleException("Lỗi khi bắt đầu xem xét khiếu nại", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            logger.error("Error getting complaint details: {}", e.getMessage(), e);
+            return handleException("Lỗi khi lấy thông tin khiếu nại", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    /**
-     * Respond to and resolve complaint (Admin only)
-     */
+
+
+
+
+
     @PutMapping("/{complaintId}/respond")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
     public ResponseEntity<?> respondToComplaint(@PathVariable Long complaintId,
@@ -172,73 +158,8 @@ public class ComplaintController {
         }
     }
 
-    /**
-     * Get complaint statistics (Admin only)
-     */
-    @GetMapping("/admin/statistics")
-    @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
-    public ResponseEntity<?> getComplaintStatistics() {
-        try {
-            logger.info("Admin getting complaint statistics");
-            
-            Map<String, Object> stats = complaintService.getComplaintStatistics();
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Lấy thống kê khiếu nại thành công");
-            response.put("statistics", stats);
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error getting complaint statistics: {}", e.getMessage(), e);
-            return handleException("Lỗi khi lấy thống kê khiếu nại", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }    /*--UTILITY ENDPOINTS--*/
 
-    /**
-     * Get complaint details (Admin only for now, simplified)
-     */
-    @GetMapping("/{complaintId}")
-    @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
-    public ResponseEntity<?> getComplaintDetails(@PathVariable Long complaintId) {
-        try {
-            ComplaintResponse complaint = complaintService.getComplaintById(complaintId);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Lấy thông tin khiếu nại thành công");
-            response.put("complaint", complaint);
-            
-            return ResponseEntity.ok(response);
-        } catch (EntityNotFoundException e) {
-            logger.error("Complaint not found: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                .body(Map.of("success", false, "message", e.getMessage()));
-        } catch (Exception e) {
-            logger.error("Error getting complaint details: {}", e.getMessage(), e);
-            return handleException("Lỗi khi lấy thông tin khiếu nại", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
-    /**
-     * Get available complaint statuses (Admin only)
-     */
-    @GetMapping("/statuses")
-    @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
-    public ResponseEntity<?> getComplaintStatuses() {
-        try {
-            Map<String, Object> response = new HashMap<>();
-            response.put("success", true);
-            response.put("message", "Lấy danh sách trạng thái khiếu nại thành công");
-            response.put("complaintStatuses", ComplaintStatus.values());
-            response.put("statusesWithDisplayNames", getStatusesWithDisplayNames());
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("Error getting complaint statuses: {}", e.getMessage(), e);
-            return handleException("Lỗi khi lấy danh sách trạng thái khiếu nại", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
 
     // Helper methods
 

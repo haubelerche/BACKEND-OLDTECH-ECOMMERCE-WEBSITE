@@ -231,6 +231,12 @@ public ResponseEntity<?> checkoutCart(
         }
     }
 
+
+
+
+
+
+    //KHÔNG ĐỘNG VÀO
     // Endpoint xử lý return URL từ MoMo (cho frontend)
     @GetMapping("/momo/return")
     public ResponseEntity<?> handleMomoReturn(@RequestParam Map<String, String> response) {
@@ -269,22 +275,6 @@ public ResponseEntity<?> checkoutCart(
         }
     }
 
-    // CUSTOMER - Dọn dẹp sản phẩm không khả dụng trong giỏ hàng
-    @DeleteMapping("/cleanup/{userId}")
-    @PreAuthorize("hasAuthority('Customer')")
-    public ResponseEntity<?> cleanupUnavailableProducts(@PathVariable Integer userId) {
-        try {
-            int unavailableCount = cartItemService.countUnavailableProductsInCart(userId);
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", unavailableCount > 0 ?
-                "Có " + unavailableCount + " sản phẩm không khả dụng trong giỏ hàng" :
-                "Không có sản phẩm nào không khả dụng");
-            response.put("success", true);
-            response.put("unavailableCount", unavailableCount);
-            response.put("userId", userId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return handleException("Lỗi khi kiểm tra sản phẩm không khả dụng", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
+
+
 }

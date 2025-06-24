@@ -126,6 +126,13 @@ public class OrderService {
 
         orderRepository.save(order);
         logger.info("Đơn hàng {} đã được cập nhật từ trạng thái {} sang {}.", orderId, currentStatus, newStatus);
+
+        // Gửi thông báo cho khách hàng khi trạng thái đơn hàng thay đổi
+        try {
+            notificationService.sendOrderUpdateNotification(order.getUserId(), newStatus.name(), orderId);
+        } catch (Exception e) {
+            logger.warn("Không thể gửi thông báo cập nhật đơn hàng {} cho user {}: {}", orderId, order.getUserId(), e.getMessage());
+        }
     }
 
     private void validateStatusTransition(OrderStatusEnum currentStatus, OrderStatusEnum newStatus, Integer orderId) {
