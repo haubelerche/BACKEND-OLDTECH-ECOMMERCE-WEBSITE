@@ -463,6 +463,70 @@ public class ProductController {
         }
     }
 
+    /**
+     * Filter products by category (id or name)
+     */
+    @GetMapping("/category-filter")
+    public ResponseEntity<?> filterProductsByCategory(@RequestParam String category) {
+        try {
+            if (category == null || category.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("success", false, "message", "Danh mục không được trống"));
+            }
+            logger.info("Filtering products by category: {}", category);
+            List<Product> products = productService.getAllProducts();
+            // Only visible and approved products
+            List<Product> filteredProducts = products.stream()
+                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) && Boolean.TRUE.equals(product.getIsApproved()))
+                    .collect(Collectors.toList());
+
+            String categoryFilter = category.trim().toLowerCase();
+            boolean isNumeric = categoryFilter.chars().allMatch(Character::isDigit);
+            filteredProducts = filteredProducts.stream()
+                    .filter(product -> {
+                        if (isNumeric && product.getCategoryId() != null && product.getCategoryId().toString().equals(categoryFilter)) {
+                            return true;
+                        }
+                        if (!isNumeric) {
+                            try {
+                                java.lang.reflect.Method getCategoryName = product.getClass().getMethod("getCategoryName");
+                                Object nameObj = getCategoryName.invoke(product);
+                                if (nameObj != null && nameObj.toString().toLowerCase().contains(categoryFilter)) {
+                                    return true;
+                                }
+                            } catch (Exception ignore) {}
+                        }
+                        return false;
+                    })
+                    .collect(Collectors.toList());
+
+            List<ProductListResponse> response = filteredProducts.stream()
+                    .map(this::convertToListResponse)
+                    .collect(Collectors.toList());
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "Lọc sản phẩm theo danh mục thành công");
+            result.put("category", category);
+            result.put("products", response);
+            result.put("totalCount", response.size());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error filtering products by category: {}", e.getMessage(), e);
+            return handleException("Lỗi khi lọc sản phẩm theo danh mục", e, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+    
     /*--SELLER OPERATIONS--*/    /**
      * Hide a product (Seller or Admin)
      * Also removes the product from all users' carts

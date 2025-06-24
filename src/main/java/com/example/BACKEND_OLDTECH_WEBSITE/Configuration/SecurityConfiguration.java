@@ -54,7 +54,7 @@ public class SecurityConfiguration {
                     "/oldtech/facebook/debug/**",
                     "/oldtech/manager/superadmins",
                     "/oldtech/products/**",
-                    "/products/**"
+                    "/products/**","/oldtech/products/filter/category"
                 ).permitAll()
 
 
