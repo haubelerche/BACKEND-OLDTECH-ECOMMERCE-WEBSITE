@@ -4,6 +4,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Review.ReviewRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Review.ReviewResponse;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.ReviewService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 
@@ -23,10 +24,12 @@ import java.util.stream.Collectors;
 public class ReviewController {
 
     private final ReviewService reviewService;
+    private final UserService userService;
 
     @Autowired
-    public ReviewController(ReviewService reviewService) {
+    public ReviewController(ReviewService reviewService, UserService userService) {
         this.reviewService = reviewService;
+        this.userService = userService;
     }
 
     /**
@@ -37,12 +40,16 @@ public class ReviewController {
     @PostMapping(value = "/create", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAuthority('Customer')")
     public ResponseEntity<?> createReview(
-            @RequestParam Integer reviewerId,
             @RequestParam Integer productId,
             @RequestParam Integer orderId,
             @RequestBody Map<String, Object> reviewData) {
 
         try {
+            // Lấy reviewerId từ token
+            org.springframework.security.core.Authentication authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            String userEmail = authentication.getName();
+            Integer reviewerId = userService.findUserByEmail(userEmail).getUserId();
+
             // Create ReviewRequest with auto-filled productId and orderId
             ReviewRequest reviewRequest = new ReviewRequest();
             reviewRequest.setProductId(productId);
