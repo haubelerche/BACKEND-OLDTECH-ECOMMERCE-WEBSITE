@@ -33,7 +33,7 @@ public class KPIMetricsDTO {
     private Integer activeProducts;
     
     // Geographic and Performance
-    private String topProvince;
+    private String topCity;
     private Integer suspiciousTransactions;
     private Integer newComplaints;
 }
