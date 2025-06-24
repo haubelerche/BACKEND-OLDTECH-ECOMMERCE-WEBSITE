@@ -217,6 +217,8 @@ public class ProductController {
 
 
 
+
+
     /*--PUBLIC OPERATIONS--*/
 
     /**
@@ -332,80 +334,102 @@ public class ProductController {
             @RequestParam(required = false, defaultValue = "asc") String sortOrder,
             @RequestParam(required = false) String minPrice,
             @RequestParam(required = false) String maxPrice,
-            @RequestParam(required = false) String location,
+            @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword) {
         try {
-            logger.info("Getting products with filters - sortBy: {}, sortOrder: {}, minPrice: {}, maxPrice: {}, location: {}, keyword: {}", 
-                       sortBy, sortOrder, minPrice, maxPrice, location, keyword);
-            
+            logger.info("Getting products with filters - sortBy: {}, sortOrder: {}, minPrice: {}, maxPrice: {}, category: {}, keyword: {}",
+                       sortBy, sortOrder, minPrice, maxPrice, category, keyword);
+
             List<Product> products = productService.getAllProducts();
-            
-            // Filter only visible and approved products
+
+            // Only visible and approved products
             List<Product> filteredProducts = products.stream()
-                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) && 
-                                     Boolean.TRUE.equals(product.getIsApproved()))
+                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) && Boolean.TRUE.equals(product.getIsApproved()))
                     .collect(Collectors.toList());
-            
-            // Apply keyword filter if provided
+
+            // Filter by keyword (if provided)
             if (keyword != null && !keyword.trim().isEmpty()) {
+                String keywordFilter = keyword.trim().toLowerCase();
                 filteredProducts = filteredProducts.stream()
-                        .filter(product -> 
-                            product.getName().toLowerCase().contains(keyword.toLowerCase()) ||
-                            product.getDescription().toLowerCase().contains(keyword.toLowerCase()))
+                        .filter(product ->
+                            (product.getName() != null && product.getName().toLowerCase().contains(keywordFilter)) ||
+                            (product.getDescription() != null && product.getDescription().toLowerCase().contains(keywordFilter))
+                        )
                         .collect(Collectors.toList());
             }
-            
-            // Apply price range filter if provided
+
+            // Filter by minPrice (if provided)
             if (minPrice != null && !minPrice.trim().isEmpty()) {
                 try {
                     BigDecimal minPriceValue = new BigDecimal(minPrice);
                     filteredProducts = filteredProducts.stream()
-                            .filter(product -> product.getPrice().compareTo(minPriceValue) >= 0)
+                            .filter(product -> product.getPrice() != null && product.getPrice().compareTo(minPriceValue) >= 0)
                             .collect(Collectors.toList());
                 } catch (NumberFormatException e) {
                     logger.warn("Invalid minPrice format: {}", minPrice);
                 }
             }
-            
+
+            // Filter by maxPrice (if provided)
             if (maxPrice != null && !maxPrice.trim().isEmpty()) {
                 try {
                     BigDecimal maxPriceValue = new BigDecimal(maxPrice);
                     filteredProducts = filteredProducts.stream()
-                            .filter(product -> product.getPrice().compareTo(maxPriceValue) <= 0)
+                            .filter(product -> product.getPrice() != null && product.getPrice().compareTo(maxPriceValue) <= 0)
                             .collect(Collectors.toList());
                 } catch (NumberFormatException e) {
                     logger.warn("Invalid maxPrice format: {}", maxPrice);
                 }
             }
-            
-            // Apply location filter if provided (filter by seller's location)
-            if (location != null && !location.trim().isEmpty()) {
-                filteredProducts = productService.filterProductsBySellerLocation(filteredProducts, location);
+
+            // Filter by category (id or name, if available)
+            if (category != null && !category.trim().isEmpty()) {
+                String categoryFilter = category.trim().toLowerCase();
+                boolean isNumeric = categoryFilter.chars().allMatch(Character::isDigit);
+                filteredProducts = filteredProducts.stream()
+                        .filter(product -> {
+                            // Nếu là số, so sánh với categoryId
+                            if (isNumeric && product.getCategoryId() != null && product.getCategoryId().toString().equals(categoryFilter)) {
+                                return true;
+                            }
+                            // Nếu là chuỗi, so sánh chứa với tên danh mục (nếu có getCategoryName)
+                            if (!isNumeric) {
+                                try {
+                                    java.lang.reflect.Method getCategoryName = product.getClass().getMethod("getCategoryName");
+                                    Object nameObj = getCategoryName.invoke(product);
+                                    if (nameObj != null && nameObj.toString().toLowerCase().contains(categoryFilter)) {
+                                        return true;
+                                    }
+                                } catch (Exception ignore) {}
+                            }
+                            return false;
+                        })
+                        .collect(Collectors.toList());
             }
-            
-            // Apply sorting
+
+            // Sorting (if requested)
             if (sortBy != null && !sortBy.trim().isEmpty()) {
                 switch (sortBy.toLowerCase()) {
                     case "price":
                         if ("desc".equalsIgnoreCase(sortOrder)) {
-                            filteredProducts.sort(Comparator.comparing(Product::getPrice).reversed());
+                            filteredProducts.sort(Comparator.comparing(Product::getPrice, Comparator.nullsLast(BigDecimal::compareTo)).reversed());
                         } else {
-                            filteredProducts.sort(Comparator.comparing(Product::getPrice));
+                            filteredProducts.sort(Comparator.comparing(Product::getPrice, Comparator.nullsLast(BigDecimal::compareTo)));
                         }
                         break;
                     case "name":
                         if ("desc".equalsIgnoreCase(sortOrder)) {
-                            filteredProducts.sort(Comparator.comparing(Product::getName).reversed());
+                            filteredProducts.sort(Comparator.comparing(Product::getName, Comparator.nullsLast(String::compareToIgnoreCase)).reversed());
                         } else {
-                            filteredProducts.sort(Comparator.comparing(Product::getName));
+                            filteredProducts.sort(Comparator.comparing(Product::getName, Comparator.nullsLast(String::compareToIgnoreCase)));
                         }
                         break;
                     case "created":
                     case "date":
                         if ("desc".equalsIgnoreCase(sortOrder)) {
-                            filteredProducts.sort(Comparator.comparing(Product::getCreatedAt).reversed());
+                            filteredProducts.sort(Comparator.comparing(Product::getCreatedAt, Comparator.nullsLast(java.util.Date::compareTo)).reversed());
                         } else {
-                            filteredProducts.sort(Comparator.comparing(Product::getCreatedAt));
+                            filteredProducts.sort(Comparator.comparing(Product::getCreatedAt, Comparator.nullsLast(java.util.Date::compareTo)));
                         }
                         break;
                     default:
@@ -413,11 +437,11 @@ public class ProductController {
                         break;
                 }
             }
-            
+
             List<ProductListResponse> response = filteredProducts.stream()
                     .map(this::convertToListResponse)
                     .collect(Collectors.toList());
-            
+
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("message", "Lấy danh sách sản phẩm với bộ lọc thành công");
@@ -428,10 +452,10 @@ public class ProductController {
                 "sortOrder", sortOrder,
                 "minPrice", minPrice != null ? minPrice : "",
                 "maxPrice", maxPrice != null ? maxPrice : "",
-                "location", location != null ? location : "",
+                "category", category != null ? category : "",
                 "keyword", keyword != null ? keyword : ""
             ));
-            
+
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             logger.error("Error getting products with filters: {}", e.getMessage(), e);
