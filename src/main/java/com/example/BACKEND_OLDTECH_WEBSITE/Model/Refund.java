@@ -35,8 +35,8 @@ public class Refund {
     @Column(name = "status")
     private RefundStatusEnum status;
 
-    @Column(name = "admin_notes")
-    private String adminNotes;
+    @Column(name = "seller_notes")
+    private String sellerNotes;
 
     @Column(name = "requested_at")
     private Timestamp requestedAt;

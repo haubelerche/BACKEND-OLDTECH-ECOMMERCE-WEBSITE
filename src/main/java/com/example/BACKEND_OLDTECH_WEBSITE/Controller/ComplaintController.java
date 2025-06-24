@@ -6,6 +6,9 @@ import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Complaint.CreateComplaintRequest;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ComplaintStatus;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Complaint;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.ComplaintService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.NotificationService;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Notification.CreateNotificationRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -29,6 +32,9 @@ public class ComplaintController {
     @Autowired
     private ComplaintService complaintService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     /*--USER --*/    /**
      * TẠO RA KHIẾU NẠI
      */
@@ -40,6 +46,19 @@ public class ComplaintController {
                        request.getOrderId(), request.getRespondentId());
             
             Complaint complaint = complaintService.createComplaint(request);
+
+            // Gửi thông báo cho Admin/SuperAdmin
+            CreateNotificationRequest notificationRequest = new CreateNotificationRequest();
+            notificationRequest.setNotificationType(NotificationTypeEnum.COMPLAINT_UPDATE);
+            notificationRequest.setTitle("Khiếu nại mới cần xử lý");
+            notificationRequest.setContent("Có khiếu nại mới với mã #" + complaint.getComplaintId() + ". Vui lòng kiểm tra và xử lý.");
+            notificationRequest.setLinkUrl("/admin/complaints/" + complaint.getComplaintId());
+            notificationRequest.setRecipientRoles(List.of("Admin", "SuperAdmin"));
+            notificationService.createNotificationForUsersByRoles(
+                List.of("Admin", "SuperAdmin"),
+                notificationRequest,
+                "Hệ thống"
+            );
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -71,14 +90,11 @@ public class ComplaintController {
     @GetMapping("/admin/all")
     @PreAuthorize("hasAnyAuthority('Admin', 'SuperAdmin')")
     public ResponseEntity<?> getAllComplaints(
-            @RequestParam(required = false) ComplaintStatus status,
-            @RequestParam(required = false) Integer respondentId,
-            @RequestParam(required = false) Integer orderId) {
+            @RequestParam(required = false) ComplaintStatus status)
+            {
         try {
-            logger.info("Admin getting all complaints with filters - Status: {}, RespondentId: {}, OrderId: {}", 
-                       status, respondentId, orderId);
-            
-            List<ComplaintResponse> complaints = complaintService.getAllComplaints(status, respondentId, orderId);
+
+            List<ComplaintResponse> complaints = complaintService.getAllComplaints(status);
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);

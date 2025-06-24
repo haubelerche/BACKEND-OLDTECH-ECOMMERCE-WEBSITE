@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Refund.RefundResponse;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.AccountStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.OrderStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
@@ -25,6 +26,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
+import com.example.BACKEND_OLDTECH_WEBSITE.Model.Refund;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.CategoryRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.OrderDetailRepository;
@@ -33,6 +35,7 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ReviewRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.SellerRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.UserRepository;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.RefundRepository;
 
 @Service
 public class SellerService {
@@ -44,6 +47,8 @@ public class SellerService {
     private final OrderRepository orderRepository;
     private final SellerRepository sellerRepository;
     private final CategoryRepository categoryRepository;
+    @Autowired
+    private RefundRepository refundRepository;
 
     @Autowired
     public SellerService(UserRepository userRepository, ProductRepository productRepository, ReviewRepository reviewRepository,
@@ -737,6 +742,72 @@ public class SellerService {
         // Save both entities
         sellerRepository.save(seller);
         return userRepository.save(user);
+    }
+
+    // Lấy danh sách yêu cầu hoàn tiền/đổi trả cho seller
+    public List<RefundResponse> getRefundRequestsForSeller(Integer sellerId) {
+        // Lấy tất cả refund liên quan đến seller này (dựa vào order_detail và product)
+        List<OrderDetail> orderDetails = orderDetailRepository.findByProduct_SellerId(sellerId);
+        java.util.Set<Integer> orderIds = new java.util.HashSet<>();
+        for (OrderDetail od : orderDetails) {
+            if (od.getOrder() != null && od.getOrder().getOrderId() != null) {
+                orderIds.add(od.getOrder().getOrderId());
+            }
+        }
+        List<Refund> refunds = refundRepository.findAll();
+        List<RefundResponse> result = new java.util.ArrayList<>();
+        for (Refund refund : refunds) {
+            if (orderIds.contains(refund.getOrderId())) {
+                RefundResponse resp = new RefundResponse();
+                resp.setRefundId(refund.getRefundId());
+                resp.setOrderId(refund.getOrderId());
+                resp.setUserId(refund.getUserId());
+                resp.setSellerId(sellerId); // Gán sellerId cho từng refund
+                resp.setReason(refund.getReason());
+                resp.setStatus(refund.getStatus());
+                resp.setSellerNotes(refund.getSellerNotes());
+                resp.setRequestedAt(refund.getRequestedAt());
+                resp.setUpdatedAt(refund.getUpdatedAt());
+                result.add(resp);
+            }
+        }
+        return result;
+    }
+
+    @Transactional
+    public boolean decideRefundRequest(Integer sellerId, Integer refundId, String decision, String note) {
+        // Validate seller
+        validateApprovedSeller(sellerId);
+
+        Refund refund = refundRepository.findById(refundId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy yêu cầu hoàn tiền với ID: " + refundId));
+
+        // Check if this refund belongs to this seller (by orderId -> orderDetail -> product -> sellerId)
+        List<OrderDetail> orderDetails = orderDetailRepository.findByOrder_OrderId(refund.getOrderId());
+        boolean sellerOwnsOrder = orderDetails.stream()
+                .anyMatch(od -> od.getProduct() != null && sellerId.equals(od.getProduct().getSellerId()));
+        if (!sellerOwnsOrder) {
+            throw new SecurityException("Yêu cầu hoàn tiền này không thuộc về người bán hiện tại.");
+        }
+
+        // Only allow decision if refund is Pending or Processing
+        if (refund.getStatus() != com.example.BACKEND_OLDTECH_WEBSITE.Enums.RefundStatusEnum.Pending &&
+            refund.getStatus() != com.example.BACKEND_OLDTECH_WEBSITE.Enums.RefundStatusEnum.Processing) {
+            throw new IllegalStateException("Chỉ có thể duyệt/từ chối yêu cầu hoàn tiền ở trạng thái Pending hoặc Processing.");
+        }
+
+        // Update status and seller notes
+        if ("APPROVED".equalsIgnoreCase(decision)) {
+            refund.setStatus(com.example.BACKEND_OLDTECH_WEBSITE.Enums.RefundStatusEnum.Approved);
+        } else if ("REJECTED".equalsIgnoreCase(decision)) {
+            refund.setStatus(com.example.BACKEND_OLDTECH_WEBSITE.Enums.RefundStatusEnum.Rejected);
+        } else {
+            throw new IllegalArgumentException("Quyết định không hợp lệ. Chỉ chấp nhận 'APPROVED' hoặc 'REJECTED'.");
+        }
+        refund.setSellerNotes(note);
+        refund.setUpdatedAt(new java.sql.Timestamp(System.currentTimeMillis()));
+        refundRepository.save(refund);
+        return true;
     }
 }
 

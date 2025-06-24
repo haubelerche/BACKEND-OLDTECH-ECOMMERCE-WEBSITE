@@ -33,6 +33,9 @@ ComplaintService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private NotificationService notificationService;
+
     /**
      * USER: Submit a new complaint
      */
@@ -61,6 +64,9 @@ ComplaintService {
         Complaint savedComplaint = complaintRepository.save(complaint);
         logger.info("Complaint created successfully with ID: {}", savedComplaint.getComplaintId());
         
+        // Gửi thông báo cho Admin khi có khiếu nại mới
+
+        
         return savedComplaint;
     }
 
@@ -68,27 +74,14 @@ ComplaintService {
      * ADMIN: Get all complaints with filtering
      */
     @Transactional(readOnly = true)
-    public List<ComplaintResponse> getAllComplaints(ComplaintStatus status, Integer respondentId, Integer orderId) {
-        logger.info("Admin getting all complaints with filters - Status: {}, RespondentId: {}, OrderId: {}", 
-                   status, respondentId, orderId);
-        
-        List<Complaint> complaints;        
-        if (status == null && respondentId == null && orderId == null) {
-            complaints = complaintRepository.findAll();
-        } else if (status != null && respondentId != null) {
-            complaints = complaintRepository.findByStatusAndRespondentIdOrderByCreatedAtDesc(status, respondentId);
-        } else if (status != null && orderId != null) {
-            complaints = complaintRepository.findByStatusAndOrderIdOrderByCreatedAtDesc(status, orderId);
-        } else if (respondentId != null && orderId != null) {
-            complaints = complaintRepository.findByRespondentIdAndOrderIdOrderByCreatedAtDesc(respondentId, orderId);
-        } else if (status != null) {
+    public List<ComplaintResponse> getAllComplaints(ComplaintStatus status) {
+        logger.info("Admin getting all complaints with filters - Status: {}", status);
+        List<Complaint> complaints;
+        if (status != null) {
             complaints = complaintRepository.findByStatus(status);
-        } else if (respondentId != null) {
-            complaints = complaintRepository.findByRespondentId(respondentId);
         } else {
-            complaints = complaintRepository.findByOrderId(orderId);
+            complaints = complaintRepository.findAll();
         }
-        
         return complaints.stream()
             .map(this::convertToResponse)
             .collect(Collectors.toList());
@@ -124,27 +117,6 @@ ComplaintService {
             .orElseThrow(() -> new EntityNotFoundException("Khiếu nại không tồn tại với ID: " + complaintId));
         
         return convertToResponse(complaint);
-    }
-
-    /**
-     * ADMIN: Start reviewing a complaint
-     */
-    @Transactional
-    public void startReview(Long complaintId) {
-        logger.info("Admin starting review for complaint {}", complaintId);
-        
-        Complaint complaint = complaintRepository.findById(complaintId)
-            .orElseThrow(() -> new EntityNotFoundException("Khiếu nại không tồn tại với ID: " + complaintId));
-        
-        if (complaint.getStatus() != ComplaintStatus.Pending) {
-            throw new IllegalStateException("Chỉ có thể xem xét khiếu nại đang chờ xử lý");
-        }
-        
-        complaint.setStatus(ComplaintStatus.Reviewing);
-        complaint.setUpdatedAt(Timestamp.from(Instant.now()));
-        
-        complaintRepository.save(complaint);
-        logger.info("Complaint {} is now being reviewed", complaintId);
     }
 
     /**
@@ -284,4 +256,5 @@ ComplaintService {
         
         return response;
     }
+
 }

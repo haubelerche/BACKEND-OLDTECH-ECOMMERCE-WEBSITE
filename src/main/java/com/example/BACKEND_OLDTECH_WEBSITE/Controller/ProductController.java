@@ -6,8 +6,10 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Enums.ProductStatusEnum;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.CartItemService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.NotificationService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.ProductService;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Notification.CreateNotificationRequest;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +40,9 @@ public class ProductController {
     
     @Autowired
     private CartItemService cartItemService;
+
+    @Autowired
+    private NotificationService notificationService;
 
     /*--ADMIN OPERATIONS--*/
 
@@ -433,68 +438,6 @@ public class ProductController {
         }
     }
 
-    /**
-     * Search products near user's location (advanced search)
-     */
-    @GetMapping("/search-nearby")
-    public ResponseEntity<?> searchProductsNearby(
-            @RequestParam(required = false) String userLocation,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false, defaultValue = "50") Integer radiusKm,
-            @RequestParam(required = false, defaultValue = "0") Integer page,
-            @RequestParam(required = false, defaultValue = "20") Integer size) {
-        try {
-            logger.info("Searching products nearby - location: {}, keyword: {}, radius: {}km", 
-                       userLocation, keyword, radiusKm);
-            
-            List<Product> products;
-            if (keyword != null && !keyword.trim().isEmpty()) {
-                products = productService.searchProducts(keyword.trim());
-            } else {
-                products = productService.getAllProducts();
-            }
-            
-            // Filter only visible and approved products
-            List<Product> filteredProducts = products.stream()
-                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) && 
-                                     Boolean.TRUE.equals(product.getIsApproved()))
-                    .collect(Collectors.toList());
-            
-            // Filter by location proximity if userLocation is provided
-            if (userLocation != null && !userLocation.trim().isEmpty()) {
-                filteredProducts = productService.filterProductsByLocationProximity(
-                    filteredProducts, userLocation, radiusKm);
-            }
-            
-            // Apply pagination
-            int startIndex = page * size;
-            int endIndex = Math.min(startIndex + size, filteredProducts.size());
-            List<Product> paginatedProducts = filteredProducts.subList(startIndex, endIndex);
-            
-            List<ProductListResponse> response = paginatedProducts.stream()
-                    .map(this::convertToListResponse)
-                    .collect(Collectors.toList());
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", true);
-            result.put("message", "Tìm kiếm sản phẩm lân cận thành công");
-            result.put("products", response);
-            result.put("currentPage", page);
-            result.put("pageSize", size);
-            result.put("totalCount", filteredProducts.size());
-            result.put("totalPages", (int) Math.ceil((double) filteredProducts.size() / size));
-            result.put("searchCriteria", Map.of(
-                "userLocation", userLocation != null ? userLocation : "",
-                "keyword", keyword != null ? keyword : "",
-                "radiusKm", radiusKm
-            ));
-            
-            return ResponseEntity.ok(result);
-        } catch (Exception e) {
-            logger.error("Error searching products nearby: {}", e.getMessage(), e);
-            return handleException("Lỗi khi tìm kiếm sản phẩm lân cận", e, HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-    }
     /*--SELLER OPERATIONS--*/    /**
      * Hide a product (Seller or Admin)
      * Also removes the product from all users' carts
@@ -695,4 +638,9 @@ public class ProductController {
         }
         return false;
     }
+
+    // Giả sử có phương thức tạo sản phẩm mới (addProduct hoặc tương tự), nếu không có thì bạn cần thêm vào controller này.
+    // Ví dụ thêm một endpoint POST /products để tạo sản phẩm mới:
+
+   
 }

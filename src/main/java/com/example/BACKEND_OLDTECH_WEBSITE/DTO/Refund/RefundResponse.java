@@ -10,9 +10,10 @@ public class RefundResponse {
     private Integer refundId;
     private Integer orderId;
     private Integer userId;
+    private Integer sellerId;
     private String reason;
     private RefundStatusEnum status;
-    private String adminNotes;
+    private String sellerNotes;
     private Timestamp requestedAt;
     private Timestamp updatedAt;
 }

@@ -8,6 +8,11 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Review;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Seller;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.SellerService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.NotificationService;
+import com.example.BACKEND_OLDTECH_WEBSITE.Service.UserService;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Refund.RefundResponse;
+import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Notification.CreateNotificationRequest;
+import com.example.BACKEND_OLDTECH_WEBSITE.Enums.NotificationTypeEnum;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -27,7 +32,13 @@ import java.util.Map;
 @CrossOrigin(origins = "*")
 public class SellerController {
 
-    private final SellerService sellerService;    @Autowired
+    private final SellerService sellerService;
+    @Autowired
+    private NotificationService notificationService;
+    @Autowired
+    private UserService userService;
+
+    @Autowired
     public SellerController(SellerService sellerService) {
         this.sellerService = sellerService;
     }
@@ -60,10 +71,11 @@ public class SellerController {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null && authentication.getPrincipal() instanceof UserDetails) {
                 UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-                // Assuming the seller ID is stored as a part of the username in the format "sellerId:username"
-                String[] userInfo = userDetails.getUsername().split(":");
-                if (userInfo.length > 0) {
-                    return Integer.parseInt(userInfo[0]);
+                String email = userDetails.getUsername();
+                // Lấy user từ email
+                com.example.BACKEND_OLDTECH_WEBSITE.Model.User user = userService.findUserByEmail(email);
+                if (user != null) {
+                    return user.getUserId();
                 }
             }
         } catch (Exception e) {
@@ -246,41 +258,47 @@ public class SellerController {
     @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> addProduct(@RequestBody ProductRequest request) {
         try {
-      
             Integer sellerId = getCurrentSellerIdFromToken();
-            
             // Validate that price is provided
             if (request.getPrice() == null) {
                 return ResponseEntity
                         .status(HttpStatus.BAD_REQUEST)
                         .body("Giá sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
             }
-
             // Validate name and description as well for completeness
             if (request.getName() == null || request.getName().trim().isEmpty()) {
                 return ResponseEntity
                         .status(HttpStatus.BAD_REQUEST)
                         .body("Tên sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
             }
-
             if (request.getDescription() == null || request.getDescription().trim().isEmpty()) {
                 return ResponseEntity
                         .status(HttpStatus.BAD_REQUEST)
                         .body("Mô tả sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
             }
-
             if (request.getCategoryName() == null || request.getCategoryName().trim().isEmpty()) {
                 return ResponseEntity
                         .status(HttpStatus.BAD_REQUEST)
                         .body("Danh mục sản phẩm không được để trống. Vui lòng điền đầy đủ thông tin sản phẩm.");
             }
-
             Product addedProduct = sellerService.addProduct(
                     sellerId,
                     request.getName(),
                     request.getDescription(),
                     request.getPrice(),
                     request.getCategoryName()
+            );
+            // Gửi thông báo cho Admin/SuperAdmin
+            CreateNotificationRequest notificationRequest = new CreateNotificationRequest();
+            notificationRequest.setNotificationType(NotificationTypeEnum.NEW_PRODUCT);
+            notificationRequest.setTitle("Sản phẩm mới chờ phê duyệt");
+            notificationRequest.setContent("Sản phẩm '" + addedProduct.getName() + "' vừa được đăng và đang chờ phê duyệt.");
+            notificationRequest.setLinkUrl("/admin/products/pending");
+            notificationRequest.setRecipientRoles(List.of("Admin", "SuperAdmin"));
+            notificationService.createNotificationForUsersByRoles(
+                List.of("Admin", "SuperAdmin"),
+                notificationRequest,
+                "Hệ thống"
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(addedProduct);
         } catch (EntityNotFoundException e) {
@@ -324,7 +342,7 @@ public class SellerController {
     @PreAuthorize("hasAuthority('Seller')")
     public ResponseEntity<?> deleteProduct(@PathVariable Integer productId) {
         try {
-            // TODO: Get sellerId from JWT token instead of path variable
+           
             Integer sellerId = getCurrentSellerIdFromToken();
             
             sellerService.deleteProduct(sellerId, productId);
@@ -492,5 +510,60 @@ public class SellerController {
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(errorResponse);        }
+    }
+    
+    
+    // LẤY DANH SÁCH YÊU CẦU HOÀN TIỀN/ĐỔI TRẢ
+    @GetMapping("/all-refunds")
+    @PreAuthorize("hasAuthority('Seller')")
+    public ResponseEntity<?> getMyRefundRequests() {
+        try {
+            Integer sellerId = getCurrentSellerIdFromToken();
+            List<RefundResponse> refunds = sellerService.getRefundRequestsForSeller(sellerId);
+            return ResponseEntity.ok(refunds);
+        } catch (Exception e) {
+            e.printStackTrace(); // Log lỗi chi tiết ra console
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", 500);
+            errorResponse.put("message", "An unexpected error occurred");
+            errorResponse.put("timestamp", java.time.OffsetDateTime.now().toString());
+            errorResponse.put("details", e.getMessage());
+            errorResponse.put("path", "/oldtech/sellers/all-refunds");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+    
+    // SELLER DUYỆT YÊU CẦU HOÀN TIỀN/ĐỔI TRẢ
+    @PutMapping("/refunds/{refundId}/decision")
+    @PreAuthorize("hasAuthority('Seller')")
+    public ResponseEntity<?> decideRefund(
+            @PathVariable Integer refundId,
+            @RequestBody Map<String, Object> request) {
+        try {
+            Integer sellerId = getCurrentSellerIdFromToken();
+            String decision = (String) request.get("decision"); // "APPROVED" hoặc "REJECTED"
+            String note = (String) request.getOrDefault("note", null);
+
+            if (!"APPROVED".equalsIgnoreCase(decision) && !"REJECTED".equalsIgnoreCase(decision)) {
+                return ResponseEntity.badRequest().body("Quyết định không hợp lệ. Chỉ chấp nhận 'APPROVED' hoặc 'REJECTED'.");
+            }
+
+            boolean result = sellerService.decideRefundRequest(sellerId, refundId, decision, note);
+            if (result) {
+                return ResponseEntity.ok("Cập nhật quyết định hoàn tiền thành công.");
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Không thể cập nhật quyết định hoàn tiền.");
+            }
+        } catch (EntityNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (SecurityException e) {
+            // Check if it's specifically about seller approval
+            if (e.getMessage().contains("chưa được phê duyệt") || e.getMessage().contains("không hoạt động")) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+            }
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi cập nhật quyết định hoàn tiền: " + e.getMessage());
+        }
     }
 }

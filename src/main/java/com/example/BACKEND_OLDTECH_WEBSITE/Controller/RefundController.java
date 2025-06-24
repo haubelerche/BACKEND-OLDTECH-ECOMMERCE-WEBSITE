@@ -13,7 +13,7 @@ public class RefundController {
     @Autowired
     private RefundService refundService;
     @PreAuthorize("hasAuthority('Customer')")
-    // Request a refund for an order
+    
     @PostMapping("/requestRefund")
     public ResponseEntity<?> requestRefund(@RequestParam Integer orderId, @RequestParam String reason) {
         refundService.requestRefund(orderId, reason);
