@@ -13,5 +13,5 @@ public class CartItemRequest {
 
 
     private Integer productId; 
-    private Integer quantity;
+    //private Integer quantity;
 }

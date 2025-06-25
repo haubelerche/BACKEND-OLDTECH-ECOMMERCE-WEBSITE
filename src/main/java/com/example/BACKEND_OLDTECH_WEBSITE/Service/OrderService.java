@@ -13,10 +13,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+
+import com.example.BACKEND_OLDTECH_WEBSITE.ETL.Controller.SellerDashBoardController.DashboardTrendResponse;
+import com.example.BACKEND_OLDTECH_WEBSITE.Repository.RefundRepository;
 
 @Service
 public class OrderService {
@@ -25,6 +31,9 @@ public class OrderService {
 
     @Autowired
     private NotificationService notificationService;
+
+    @Autowired
+    private RefundRepository refundRepository;
 
     @Autowired
     public OrderService(OrderRepository orderRepository) {
@@ -298,5 +307,71 @@ public class OrderService {
                     return daysSinceDelivery >= 0 && daysSinceDelivery < 3; // Orders within 3 days of delivery
                 })
                 .collect(java.util.stream.Collectors.toList());
+    }
+
+    // Tổng doanh thu seller trong khoảng thời gian
+    public double getRevenue(LocalDate start, LocalDate end) {
+        // TODO: Lấy sellerId từ context hoặc truyền vào nếu cần
+        Integer sellerId = 1; // demo, cần sửa lại lấy đúng sellerId
+        BigDecimal revenue = orderRepository.getTotalRevenueBySellerAndDateRange(sellerId, start, end);
+        return revenue != null ? revenue.doubleValue() : 0.0;
+    }
+
+    // Tổng số đơn hàng seller trong khoảng thời gian
+    public int getTotalOrders(LocalDate start, LocalDate end) {
+        Integer sellerId = 1; // demo
+        Long total = orderRepository.getTotalOrdersBySellerAndDateRange(sellerId, start, end);
+        return total != null ? total.intValue() : 0;
+    }
+
+    // Số đơn đổi trả seller trong khoảng thời gian
+    public int getRefundOrders(LocalDate start, LocalDate end) {
+        Integer sellerId = 1; // demo
+        Long total = refundRepository.getReturnOrdersCountBySellerAndDateRange(sellerId, start, end);
+        return total != null ? total.intValue() : 0;
+    }
+
+    // Tỷ lệ khách hàng quay lại (giả lập, cần bổ sung query thực tế nếu muốn)
+    public double getRepeatCustomerRate(LocalDate start, LocalDate end) {
+        return 0.0;
+    }
+
+    // Trend doanh thu, đơn hàng, đổi trả (giả lập, cần bổ sung nếu muốn)
+    public DashboardTrendResponse getSalesTrend(LocalDate start, LocalDate end, String preset) {
+        Integer sellerId = 1; // demo, cần truyền sellerId động nếu có
+        DashboardTrendResponse resp = new DashboardTrendResponse();
+        resp.labels = new ArrayList<>();
+        resp.revenueTrend = new ArrayList<>();
+        resp.aovTrend = new ArrayList<>();
+        resp.orderTrend = new ArrayList<>();
+        resp.refundOrderTrend = new ArrayList<>();
+        resp.conversionRateTrend = new ArrayList<>();
+        resp.repeatCustomerRateTrend = new ArrayList<>();
+        // Lấy doanh thu và số đơn theo ngày
+        List<Object[]> revenueRows = orderRepository.getDailyRevenueBySellerAndDateRange(sellerId, start, end);
+        List<Object[]> orderRows = orderRepository.getDailyOrdersBySellerAndDateRange(sellerId, start, end);
+        List<Object[]> refundRows = refundRepository.getDailyReturnsBySellerAndDateRange(sellerId, start, end);
+        // Map ngày -> doanh thu, đơn, đổi trả
+        java.util.Map<String, Double> revenueMap = new java.util.HashMap<>();
+        java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
+        java.util.Map<String, Integer> refundMap = new java.util.HashMap<>();
+        for (Object[] row : revenueRows) revenueMap.put(row[0].toString(), ((Number)row[1]).doubleValue());
+        for (Object[] row : orderRows) orderMap.put(row[0].toString(), ((Number)row[1]).intValue());
+        for (Object[] row : refundRows) refundMap.put(row[0].toString(), ((Number)row[1]).intValue());
+        // Duyệt từng ngày trong khoảng
+        LocalDate d = start;
+        while (!d.isAfter(end)) {
+            String label = d.toString();
+            resp.labels.add(label);
+            double revenue = revenueMap.getOrDefault(label, 0.0);
+            int orders = orderMap.getOrDefault(label, 0);
+            int refunds = refundMap.getOrDefault(label, 0);
+            resp.revenueTrend.add(revenue);
+            resp.orderTrend.add(orders);
+            resp.refundOrderTrend.add(refunds);
+            resp.aovTrend.add(orders > 0 ? revenue / orders : 0.0);
+            d = d.plusDays(1);
+        }
+        return resp;
     }
 }

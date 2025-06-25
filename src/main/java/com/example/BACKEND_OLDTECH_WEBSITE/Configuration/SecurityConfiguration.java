@@ -10,21 +10,23 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.security.config.http.SessionCreationPolicy;
 
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.core.Ordered;
 import org.springframework.web.filter.ForwardedHeaderFilter;
 
-import java.util.Arrays;
-
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpMethod;
+import java.util.Arrays;
+
+import static org.springframework.security.config.Customizer.withDefaults;
 
 @Configuration
 @EnableWebSecurity
@@ -40,93 +42,87 @@ public class SecurityConfiguration {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .cors(cors -> cors.configurationSource(corsConfigurationSource())) // Đảm bảo dùng đúng bean CORS, không phụ thuộc vào withDefaults
+            .exceptionHandling(exception -> exception
+                .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+            )
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers(
-                    "/auth/**",
+                    // Only allow /auth endpoints except /auth/profile
+                    "/auth/login", "/auth/register",
+                    "/auth/2fa/**",
                     "/oauth2/**",
                     "/login/oauth2/code/*",
                     "/public/**",
-                    "/oldtech/auth/**",
-                    "/oldtech/oauth2/**",
-                    "/oldtech/login/oauth2/code/*",
-                    "/oldtech/public/**",
-                    "/oldtech/facebook/debug/**",
-                    "/oldtech/manager/superadmins",
-                    "/oldtech/products/**",
-                    "/products/**","/oldtech/products/filter/category"
+                    
+                    "/oauth2/**",
+                    "/login/oauth2/code/*",
+                    "/public/**",
+                    "/facebook/debug/**",
+                    "/manager/superadmins",
+                    "/products/**",
+                    "/products/filter/category",
+                    "/api/seller-dashboard/**",
+                    "/admin-dashboard/**",
+                    "/health/**"
                 ).permitAll()
-
-
-                    .requestMatchers(
-                            "/admin/**",
-                            "/oldtech/admin/**",
-                            "/oldtech/verification/admin/**",
-                            "/verification/admin/**",
-                            "/oldtech/product/**",
-                            "/oldtech/api/**",
-                            "/oldtech/admin-alerts/**",  // Removed extra quotation mark
-                            "/oldtech/admin-dashboard",
-                            "/oldtech/admin-dashboard-etl/**",
-                            "/oldtech/etl",
-                            "/oldtech/etl/seller-dashboard/**",
-                            "/oldtech/etl/seller-dashboard-etl/**",
-                            "/oldtech/notifications/**"
-                    ).hasAnyAuthority("Admin", "SuperAdmin")
-
-                .requestMatchers( "/oldtech/reviews/**","/oldtech/addresses/**","/oldtech/orders/**", "/oldtech/cart/**"
-
-                            )
-                .hasAnyAuthority("Customer")
-
-
-
-                    .requestMatchers(
-                            "/oldtech/seller/**",
-                            "/oldtech/api/**",
-                            "/oldtech/api/seller/dashboard",  // Added leading slash
-                            "/oldtech/etl",
-                            "/oldtech/etl/seller-dashboard/**",
-                            "/oldtech/etl/seller-dashboard-etl/**"
-                    ).hasAnyAuthority("Seller")
-
-
+                .requestMatchers("/auth/profile").authenticated()
+              
                 .requestMatchers(
-                        "/oldtech/manager/admins",
-                        "/oldtech/manager/**",
-                        "/manager/**","/oldtech/**",
-                        "/oldtech/manager/admins/**"
+                    "/admin/**",
+                    "/oldtech/admin/**",
+                    "/oldtech/verification/admin/**",
+                    "/verification/admin/**",
+                    "/oldtech/product/**",
+                    "/oldtech/api/**",
+                    "/oldtech/admin-alerts/**",
+                    "/oldtech/admin-dashboard",
+                    "/oldtech/admin-dashboard-etl/**",
+                    "/oldtech/etl",
+                    "/oldtech/etl/seller-dashboard/**",
+                    "/oldtech/etl/seller-dashboard-etl/**",
+                    "/oldtech/notifications/**"
+                ).hasAnyAuthority("Admin", "SuperAdmin")
+                .requestMatchers(
+                    "/oldtech/reviews/**",
+                    "/oldtech/addresses/**",
+                    "/oldtech/orders/**",
+                    "/oldtech/cart/**"
+                ).hasAnyAuthority("Customer")
+                .requestMatchers(
+                    "/oldtech/seller/**",
+                    "/oldtech/api/**",
+                    "/oldtech/api/seller/dashboard",
+                    "/oldtech/etl",
+                    "/oldtech/etl/seller-dashboard/**",
+                    "/oldtech/etl/seller-dashboard-etl/**"
+                ).hasAnyAuthority("Seller")
+                .requestMatchers(
+                    "/oldtech/manager/admins",
+                    "/oldtech/manager/**",
+                    "/manager/**",
+                    "/oldtech/**",
+                    "/oldtech/manager/admins/**"
                 ).hasAuthority("SuperAdmin")
-
-
-                // TODO: SEARCH FOR PRODUCT LÀ PUBLIC; SEARCH FOR SELLER LÀ CUSTOMER ACTIVITIES; SEARCH FOR ALLS LÀ ADMIN ACTIVITIES
                 .requestMatchers(
                     "/oldtech/customer/all",
                     "/oldtech/customer/{userId}",
-                        "/oldtech/customer/profile/**",
+                    "/oldtech/customer/profile/**",
+                    "/oldtech/customer/single",
                     //search
                     "/oldtech/customer/search/name/{name}",
                     "/oldtech/customer/search/email/{email}",
                     "/oldtech/customer/search/phone/{phoneNumber}",
-                      "/oldtech/customer/search/email/",
+                    "/oldtech/customer/search/email/",
                     "/oldtech/customer/search/phone/",
                     "/oldtech/customer/search/name/"
                 ).hasAnyAuthority("Customer", "Admin", "SuperAdmin")
+                // Tất cả các request còn lại (bao gồm /auth/profile) chỉ cần authenticated
                 .anyRequest().authenticated()
             )
-
-
-
-
-
-
-
-
-
-
-
             .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)  // Changed from ALWAYS to STATELESS for better REST API security
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
             .oauth2Login(oauth2 -> oauth2
@@ -148,22 +144,6 @@ public class SecurityConfiguration {
         return config.getAuthenticationManager();
     }
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList(
-            "http://localhost:3000",
-            "https://funny-leading-puma.ngrok-free.app"
-        ));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(true);
-
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
-        return source;
-    }
-
 
     @Bean
     public FilterRegistrationBean<ForwardedHeaderFilter> forwardedHeaderFilter() {
@@ -171,5 +151,27 @@ public class SecurityConfiguration {
         filterRegistrationBean.setFilter(new ForwardedHeaderFilter());
         filterRegistrationBean.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return filterRegistrationBean;
+    }
+
+    @Bean
+    public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+        org.springframework.web.cors.CorsConfiguration config = new org.springframework.web.cors.CorsConfiguration();
+        config.setAllowedOrigins(Arrays.asList("http://localhost:3000", "https://funny-leading-puma.ngrok-free.app"));
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        config.setAllowedHeaders(Arrays.asList(
+            "Authorization",
+            "Content-Type",
+            "X-Requested-With",
+            "Accept",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers"
+        ));
+        config.setExposedHeaders(Arrays.asList("Authorization", "Content-Disposition"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
+        org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }

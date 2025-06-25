@@ -36,11 +36,23 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
         final String jwt;
         final String userEmail;
 
+        // Bypass JWT filter for preflight OPTIONS requests
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         String path = request.getRequestURI();
-        // Only bypass authentication for public auth endpoints
-        // Allow /auth/login, /auth/register etc., but require auth for /auth/2fa/ endpoints
-        if ((path.startsWith("/oldtech/auth/") || path.startsWith("/auth/"))
-                && !path.contains("/2fa/")) {
+        // Bypass JWT filter for only public endpoints (permitAll in SecurityConfig)
+        if (path.equals("/auth/login") || path.equals("/auth/register") ||
+            path.equals("/oldtech/auth/login") || path.equals("/oldtech/auth/register") ||
+            path.startsWith("/oauth2/") || path.startsWith("/login/oauth2/code/") ||
+            path.startsWith("/public/") || path.startsWith("/oldtech/public/") ||
+            path.startsWith("/oldtech/facebook/debug/") || path.startsWith("/oldtech/manager/superadmins") ||
+            path.startsWith("/oldtech/products/") || path.startsWith("/products/") ||
+            path.startsWith("/oldtech/products/filter/category") ||
+            path.startsWith("/oldtech/api/seller-dashboard/") || path.startsWith("/oldtech/admin-dashboard/") ||
+            path.startsWith("/oldtech/health/")) {
             filterChain.doFilter(request, response);
             return;
         }

@@ -88,12 +88,21 @@ public class UserController {
     }
 
 
-// LAY HO SO CUA MOT NGUOI ((SUPER)ADMIN)
+// LAY HO SO CUA MOT NGUOI
+
     @GetMapping("/single/{userId}")
     public ResponseEntity<?> getUserById(@PathVariable Integer userId) {
         try {
             User user = userService.getUserById(userId);
-            return ResponseEntity.ok(user);
+            Map<String, Object> response = new HashMap<>();
+            response.put("firstName", user.getFirstName() != null ? user.getFirstName() : "");
+            response.put("lastName", user.getLastName() != null ? user.getLastName() : "");
+            response.put("dob", user.getDob() != null ? user.getDob().toString() : "");
+            response.put("phoneNumber", user.getPhoneNumber() != null ? user.getPhoneNumber() : "");
+            response.put("avatarUrl", user.getAvatarUrl() != null ? user.getAvatarUrl() : "");
+            response.put("email", user.getEmail() != null ? user.getEmail() : "");
+            response.put("refund_momo_account", user.getRefundMomoAccount() != null ? user.getRefundMomoAccount() : "");
+            return ResponseEntity.ok(response);
         } catch (UsernameNotFoundException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {

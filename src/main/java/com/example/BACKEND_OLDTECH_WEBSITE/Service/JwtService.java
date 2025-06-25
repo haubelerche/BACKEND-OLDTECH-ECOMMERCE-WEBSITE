@@ -100,4 +100,30 @@ public class JwtService {
         byte[] keyBytes = secretKey.getBytes();
         return Keys.hmacShaKeyFor(keyBytes);
     }
+
+    public String generateToken(UserDetails userDetails) {
+        Map<String, Object> claims = new HashMap<>();
+        // Always try to add role if possible
+        String role = null;
+        if (userDetails instanceof User) {
+            role = ((User) userDetails).getRole().toString();
+        } else if (userDetails.getAuthorities() != null && !userDetails.getAuthorities().isEmpty()) {
+            // Fallback: get first authority as role
+            role = userDetails.getAuthorities().iterator().next().getAuthority();
+        }
+        if (role != null) {
+            claims.put("role", role);
+        }
+        return generateToken(claims, userDetails);
+    }
+
+    public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+        return Jwts.builder()
+                .setClaims(extraClaims)
+                .setSubject(userDetails.getUsername())
+                .setIssuedAt(new Date(System.currentTimeMillis()))
+                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
 }

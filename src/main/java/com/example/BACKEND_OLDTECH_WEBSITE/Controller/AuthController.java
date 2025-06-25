@@ -34,7 +34,7 @@ public class AuthController {
     @Autowired
     private AuthenticationManager authenticationManager;
 
-   
+
     private final JWTProvider tokenProvider;
 
     @Autowired
@@ -47,16 +47,15 @@ public class AuthController {
     private String frontendUrl;
 
 
-
-//ĐĂNG NHẬP
+    //ĐĂNG NHẬP
     @PostMapping("/login")
     public ResponseEntity<?> loginUser(@Valid @RequestBody LoginRequest loginRequest) {
         try {
             Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    loginRequest.getEmail(),
-                    loginRequest.getPassword()
-                )
+                    new UsernamePasswordAuthenticationToken(
+                            loginRequest.getEmail(),
+                            loginRequest.getPassword()
+                    )
             );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -77,7 +76,7 @@ public class AuthController {
     }
 
 
-//ĐĂNG KÝ
+    //ĐĂNG KÝ
     @PostMapping("/register")
     public ResponseEntity<?> registerUser(@Valid @RequestBody RegisterRequest registerRequest) {
         System.out.println("Register endpoint called!");
@@ -94,10 +93,10 @@ public class AuthController {
 
             // Generate token for authentication after registration
             Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    registerRequest.getEmail(),
-                    registerRequest.getPassword()
-                )
+                    new UsernamePasswordAuthenticationToken(
+                            registerRequest.getEmail(),
+                            registerRequest.getPassword()
+                    )
             );
 
             SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -119,14 +118,12 @@ public class AuthController {
     }
 
 
-
-
-//LÀM MỚI TOKEN
+    //LÀM MỚI TOKEN
     @PostMapping("/refresh-token")
     public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshTokenRequest refreshTokenRequest) {
         try {
             String refreshToken = refreshTokenRequest.getRefreshToken();
-            
+
             if (!tokenProvider.validateToken(refreshToken)) {
                 return ResponseEntity.badRequest().body("Refresh token không hợp lệ!");
             }
@@ -147,34 +144,54 @@ public class AuthController {
     }
 
 
-
 //QUÊN MẬT KHẨU
 
 
-
-
-
-
-
-
-
-
-
-
-
-//ĐĂNG XUẤT
+    //ĐĂNG XUẤT
     @PostMapping("/logout")
     public ResponseEntity<?> logoutUser() {
         // For stateless JWT, just return OK. Client should delete the token.
         return ResponseEntity.ok("Đăng xuất thành công!");
     }
 
-
-
-
-
-
-
-
+    @GetMapping("/profile")
+    public ResponseEntity<?> getProfile(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof org.springframework.security.core.userdetails.User userDetails) {
+            User user = userService.findUserByEmail(userDetails.getUsername());
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body("User not found");
+            }
+            Map<String, Object> profile = new HashMap<>();
+            profile.put("userId", user.getUserId());
+            profile.put("email", user.getEmail());
+            profile.put("phoneNumber", user.getPhoneNumber());
+            profile.put("firstName", user.getFirstName());
+            profile.put("lastName", user.getLastName());
+            profile.put("dob", user.getDob());
+            profile.put("avatarUrl", user.getAvatarUrl());
+            profile.put("role", user.getRole());
+            profile.put("accountStatus", user.getAccountStatus());
+            profile.put("refundMomoAccount", user.getRefundMomoAccount());
+            profile.put("authProvider", user.getAuthProvider());
+            profile.put("authProviderId", user.getAuthProviderId());
+            profile.put("createdAt", user.getCreatedAt());
+            profile.put("updatedAt", user.getUpdatedAt());
+            profile.put("lastLogin", user.getLastLogin());
+            profile.put("isVerified", user.getIsVerified());
+            profile.put("twoFactorEnabled", user.isTwoFactorEnabled());
+            profile.put("suspensionEndTime", user.getSuspensionEndTime());
+            profile.put("suspensionReason", user.getSuspensionReason());
+            profile.put("livingLocation", user.getLivingLocation());
+            profile.put("selfiePicUrl", user.getSelfiePicUrl());
+            profile.put("frontImageUrl", user.getFrontImageUrl());
+            profile.put("backImageUrl", user.getBackImageUrl());
+            return ResponseEntity.ok(profile);
+        }
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Unauthorized");
+    }
 
 }

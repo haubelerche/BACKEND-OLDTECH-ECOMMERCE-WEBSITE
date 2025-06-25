@@ -382,7 +382,6 @@ public Map<String, Object> checkoutCart(Integer userId, Integer cartId, PaymentM
             itemMap.put("productId", item.getProduct().getProductId());
             itemMap.put("productName", item.getProduct().getName());
             itemMap.put("price", item.getProduct().getPrice());
-            itemMap.put("quantity", 1); 
             return itemMap;
         }).toList());
         

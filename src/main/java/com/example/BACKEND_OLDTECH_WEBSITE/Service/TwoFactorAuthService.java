@@ -87,24 +87,41 @@ public class TwoFactorAuthService {
      * Check if the provided code is valid for the given user's 2FA setup
      */
     public boolean verifyCode(String email, String code) {
-        User user = userService.findUserByEmail(email);
-
-        if (user == null || user.getTwoFactorSecret() == null) {
+        // Luôn lấy user mới nhất từ DB để tránh cache entity cũ
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null || user.getTwoFactorSecret() == null || user.getTwoFactorSecret().trim().isEmpty()) {
+            logger.warn("[2FA] User not found or secret is null/empty. Email: {}", email);
             return false;
         }
-
+        String secret = user.getTwoFactorSecret().trim();
+        logger.info("[2FA] Verifying code for user: {} | Secret: {} | Code received: {}", email, secret, code);
         TimeProvider timeProvider = new SystemTimeProvider();
-        CodeGenerator codeGenerator = new DefaultCodeGenerator();
+        CodeGenerator codeGenerator = new DefaultCodeGenerator(HashingAlgorithm.SHA1, 6);
         CodeVerifier verifier = new DefaultCodeVerifier(codeGenerator, timeProvider);
-
-        boolean codeIsValid = verifier.isValidCode(user.getTwoFactorSecret(), code);
-
-        // If this is the first verification, enable 2FA for the user
+        long currentTimeSeconds = System.currentTimeMillis() / 1000L;
+        int period = 30;
+        boolean codeIsValid = false;
+        for (int i = -1; i <= 1; i++) {
+            long timeStep = (currentTimeSeconds / period) + i;
+            try {
+                String backendCode = codeGenerator.generate(secret, timeStep);
+                logger.info("[2FA] Possible TOTP at step {}: {}", i, backendCode);
+                if (backendCode.equals(code)) {
+                    logger.info("[2FA] User code matches backend TOTP at step {}", i);
+                    codeIsValid = true;
+                }
+            } catch (Exception e) {
+                logger.warn("[2FA] Error generating TOTP for step {}: {}", i, e.getMessage());
+            }
+        }
+        if (!codeIsValid) {
+            codeIsValid = verifier.isValidCode(secret, code);
+        }
+        logger.info("[2FA] Code valid: {}", codeIsValid);
         if (codeIsValid && !user.isTwoFactorEnabled()) {
             user.setTwoFactorEnabled(true);
             userRepository.save(user);
         }
-
         return codeIsValid;
     }
 
@@ -112,7 +129,7 @@ public class TwoFactorAuthService {
      * Check if 2FA is enabled for a user
      */
     public boolean is2FAEnabled(User user) {
-        return user != null && user.isTwoFactorEnabled() && user.getTwoFactorSecret() != null;
+        return user != null && user.isTwoFactorEnabled();
     }
 
     /**
@@ -131,34 +148,33 @@ public class TwoFactorAuthService {
      * Regenerate QR code using existing secret (for password recovery scenarios)
      * This doesn't create a new secret, just regenerates the QR code
      */
-    @Transactional(readOnly = true)
+    @Transactional // Bỏ readOnly để đảm bảo commit secret mới vào DB ngay lập tức
     public TwoFactorSetupResponse regenerateQRCode(User user) throws QrGenerationException {
-        if (user.getTwoFactorSecret() == null || user.getTwoFactorSecret().trim().isEmpty()) {
-            throw new IllegalStateException("User does not have a 2FA secret configured");
+        String secret = user.getTwoFactorSecret();
+        if (secret == null || secret.trim().isEmpty()) {
+            SecretGenerator secretGenerator = new DefaultSecretGenerator();
+            secret = secretGenerator.generate();
+            user.setTwoFactorSecret(secret);
+            userRepository.save(user);
+            logger.info("Auto-generated new 2FA secret for user {} during QR recovery", user.getEmail());
         }
-
-        String existingSecret = user.getTwoFactorSecret();
-        
-        logger.info("Regenerating QR code for user: {} using existing secret", user.getEmail());
-
-        // Generate the QR code using the existing secret
+        logger.info("Regenerating QR code for user: {} using secret", user.getEmail());
+        // Generate the QR code using the (new or existing) secret
         QrData qrData = new QrData.Builder()
                 .label(user.getEmail())
-                .secret(existingSecret)
+                .secret(secret)
                 .issuer(issuer)
                 .algorithm(HashingAlgorithm.SHA1)
                 .digits(6)
                 .period(30)
                 .build();
-
         QrGenerator qrGenerator = new ZxingPngQrGenerator();
         byte[] qrImage = qrGenerator.generate(qrData);
-
         // Create and populate the response
         TwoFactorSetupResponse response = new TwoFactorSetupResponse();
         response.setQrCodeDataUrl("data:image/png;base64," + Base64.getEncoder().encodeToString(qrImage));
-        response.setSecretKey(existingSecret);
-        response.setMessage("QR code đã được tạo lại từ secret key hiện có");
+        response.setSecretKey(secret);
+        response.setMessage("QR code đã được tạo lại từ secret key hiện có hoặc vừa được tạo mới");
 
         return response;
     }
