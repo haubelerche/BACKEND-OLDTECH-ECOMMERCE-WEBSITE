@@ -680,7 +680,7 @@ public class OrderController {
 
 // CUSTOMER - Cập nhật trạng thái đơn hàng (chỉ cho phép: Completed, Cancelled, Returned)
     @PutMapping("/customer-update-status/{orderId}")
-    @PreAuthorize("hasAuthority('Customer')")
+    @PreAuthorize("hasAuthority('Seller') or hasAuthority('Customer')")
     public ResponseEntity<?> updateOrderStatusByCustomer(
             @PathVariable Integer orderId,
             @RequestParam String status) {

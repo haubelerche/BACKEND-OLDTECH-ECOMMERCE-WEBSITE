@@ -137,7 +137,7 @@ public class UserController {
 
 
 //CẬP NHẬT HỒ SƠ NGƯỜI DÙNG
-    @RequestMapping(value = "/profile/update/{userId}", method = {RequestMethod.PUT, RequestMethod.POST})
+    @PutMapping("/profile/update/{userId}")
     public ResponseEntity<?> updateUserProfile(@PathVariable Integer userId, @RequestBody(required = false) Map<String, Object> profileData) {
         try {
             // Check if the request body is empty
@@ -267,35 +267,7 @@ public class UserController {
 
 
 
-// LAY CAC LOAI THONG BAO
-    @GetMapping("/profile/notifications/{userId}")
-    public ResponseEntity<?> getNotifications(@PathVariable Integer userId) {
-        try {
-            List<Notification> notifications = userService.getNotifications(userId);
-            return ResponseEntity.ok(notifications);
-        } catch (UsernameNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi lấy thông báo: " + e.getMessage());
-        }
-    }
 
-
-
-// MARK THONG BAO DA DOC
-    @PostMapping("/profile/notifications/{notificationId}/read/{userId}")
-    public ResponseEntity<?> markNotificationRead(@PathVariable Integer userId, @PathVariable Long notificationId) {
-        try {
-            userService.markNotificationRead(userId, notificationId);
-            return ResponseEntity.ok("Thông báo đã được đánh dấu là đã đọc.");
-        } catch (UsernameNotFoundException | EntityNotFoundException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
-        } catch (SecurityException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Lỗi khi đánh dấu thông báo đã đọc: " + e.getMessage());
-        }
-    }
 
 
 

@@ -106,7 +106,7 @@ public class FacebookOAuth2UserService implements OAuth2UserService<OAuth2UserRe
                 }
 
                 return new DefaultOAuth2User(
-                    Collections.singleton(new SimpleGrantedAuthority("ROLE_USER")),
+                    Collections.singleton(new SimpleGrantedAuthority("Customer")),
                     attributes,
                     "id" // Facebook uses "id" as the name attribute key
                 );

@@ -56,6 +56,16 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Recommendation System -->
+
+		<dependency>
+			<groupId>org.apache.spark</groupId>
+			<artifactId>spark-mllib_2.11</artifactId>
+			<version>2.4.3</version>
+			<scope>provided</scope>
+		</dependency>
+
+
 
 		<!-- Two-Factor Authentication -->
 		<dependency>

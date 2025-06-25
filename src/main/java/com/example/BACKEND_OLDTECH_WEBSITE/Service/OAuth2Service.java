@@ -404,6 +404,7 @@ public class OAuth2Service {
                 (user.getRole() == RoleEnum.Seller || user.getRole() == RoleEnum.Customer));
     }
 
+
     private void sendProfileCompletionNotification(User user) {
         Notification notification = new Notification();
         notification.setUser(user);        notification.setMessage("Vui lòng vào phần cài đặt và cập nhật đầy đủ thông tin cá nhân của bạn để hoàn tất đăng ký tài khoản.");
