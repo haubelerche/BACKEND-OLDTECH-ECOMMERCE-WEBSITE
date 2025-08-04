@@ -7,6 +7,9 @@ import com.example.BACKEND_OLDTECH_WEBSITE.Repository.CategoryRepository;
 import com.example.BACKEND_OLDTECH_WEBSITE.Repository.ProductRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +17,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Collections;
 
 @Service
 public class ProductService {
@@ -248,5 +252,22 @@ public class ProductService {
 
     public Product save(Product product) {
         return productRepository.save(product);
+    }
+
+    public Page<Product> searchVisibleApprovedProducts(String keyword, int page, int size) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            return productRepository.findByIsVisibleTrueAndIsApprovedTrueAndNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
+                keyword, keyword, pageable);
+        } else {
+            return productRepository.findByIsVisibleTrueAndIsApprovedTrue(pageable);
+        }
+    }
+
+    /**
+     * Get a random list of products (size = count) using fast DB query
+     */
+    public List<Product> getRandomProducts(int count) {
+        return productRepository.findRandomVisibleApprovedProducts(count);
     }
 }

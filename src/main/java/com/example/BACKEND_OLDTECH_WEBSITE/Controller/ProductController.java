@@ -296,27 +296,32 @@ public class ProductController {
     }
 
     /**
-     * Get all visible and approved products
+     * Get all visible and approved products with optional keyword search and pagination
      */
     @GetMapping("/list")
-    public ResponseEntity<?> getAllProducts() {
+    public ResponseEntity<?> getAllProducts(
+            @RequestParam(value = "keyword", required = false) String keyword,
+            @RequestParam(value = "page", required = false) Integer page,
+            @RequestParam(value = "size", required = false) Integer size) {
         try {
-            logger.info("Getting all visible products");
-            List<Product> products = productService.getAllProducts();
-            
-            // Filter only visible and approved products for public access
-            List<ProductListResponse> response = products.stream()
-                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) && 
-                                     Boolean.TRUE.equals(product.getIsApproved()))
+            int pageNum = (page == null || page < 1) ? 1 : page;
+            int pageSize = (size == null || size < 1) ? 20 : size;
+            logger.info("Getting all visible products (page: {}, size: {}, keyword: {})", pageNum, pageSize, keyword);
+
+            var productPage = productService.searchVisibleApprovedProducts(keyword, pageNum, pageSize);
+            List<ProductListResponse> response = productPage.getContent().stream()
                     .map(this::convertToListResponse)
                     .collect(Collectors.toList());
-            
+
             Map<String, Object> result = new HashMap<>();
             result.put("success", true);
             result.put("message", "Lấy danh sách sản phẩm thành công");
             result.put("products", response);
-            result.put("totalCount", response.size());
-            
+            result.put("totalCount", productPage.getTotalElements());
+            result.put("page", pageNum);
+            result.put("size", pageSize);
+            result.put("totalPages", productPage.getTotalPages());
+
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             logger.error("Error getting all products: {}", e.getMessage(), e);
@@ -577,6 +582,31 @@ public class ProductController {
         } catch (Exception e) {
             logger.error("Error hiding product {}: {}", productId, e.getMessage(), e);
             return handleException("Lỗi khi ẩn sản phẩm", e, HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    /**
+     * Get 15 random products (auto-refresh every 5 minutes on frontend)
+     */
+    @GetMapping("/random15")
+    public ResponseEntity<?> getRandom15Products() {
+        try {
+            List<Product> products = productService.getRandomProducts(15);
+            // Only return visible and approved products
+            List<ProductListResponse> response = products.stream()
+                    .filter(product -> Boolean.TRUE.equals(product.getIsVisible()) &&
+                                     Boolean.TRUE.equals(product.getIsApproved()))
+                    .map(this::convertToListResponse)
+                    .collect(Collectors.toList());
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", true);
+            result.put("message", "Lấy ngẫu nhiên 15 sản phẩm thành công");
+            result.put("products", response);
+            result.put("totalCount", response.size());
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            logger.error("Error loading random 15 products: {}", e.getMessage(), e);
+            return handleException("Lỗi khi lấy ngẫu nhiên sản phẩm", e, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
