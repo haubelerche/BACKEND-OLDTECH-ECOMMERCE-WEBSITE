@@ -89,7 +89,9 @@ public class SecurityConfiguration {
                     "/oldtech/addresses/**",
                     "/oldtech/orders/**",
                     "/oldtech/cart/**"
-                ).hasAnyAuthority("Customer")
+                ).permitAll()
+                .requestMatchers(
+                    "/oldtech/seller/**").permitAll()
                 .requestMatchers(
                     "/oldtech/seller/**",
                     "/oldtech/api/**",
@@ -106,6 +108,8 @@ public class SecurityConfiguration {
                     "/oldtech/manager/admins/**"
                 ).hasAuthority("SuperAdmin")
                 .requestMatchers(
+                    "/oldtech/customer/single/**").permitAll()
+                .requestMatchers(
                     "/oldtech/customer/all",
                     "/oldtech/customer/{userId}",
                     "/oldtech/customer/profile/**",
@@ -118,6 +122,8 @@ public class SecurityConfiguration {
                     "/oldtech/customer/search/phone/",
                     "/oldtech/customer/search/name/"
                 ).hasAnyAuthority("Customer", "Admin", "SuperAdmin")
+                .requestMatchers("/oldtech/sellers/**").permitAll()
+                .requestMatchers("/oldtech/customer/single/**").permitAll()
                 // Tất cả các request còn lại (bao gồm /auth/profile) chỉ cần authenticated
                 .anyRequest().authenticated()
             )
