@@ -31,7 +31,7 @@ public class CreateOrderRequest {
     private String notes; // Optional
     
     @Min(value = 1, message = "ID địa chỉ giao hàng phải lớn hơn 0")
-    private Integer shippingAddressId; // Optional, will use user's first address if not provided
+    private Long shippingAddressId; // Optional, will use user's first address if not provided
 
     /**
      * Custom setter for totalAmount to handle different input types
@@ -91,6 +91,10 @@ public class CreateOrderRequest {
                 throw new IllegalArgumentException("Tổng tiền quá lớn, không thể vượt quá 1 tỷ");
             }
         }
+    }
+
+    public void setShippingAddressId(Long shippingAddressId) {
+        this.shippingAddressId = shippingAddressId;
     }
 
     @Override

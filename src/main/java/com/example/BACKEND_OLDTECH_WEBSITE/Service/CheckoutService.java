@@ -49,7 +49,7 @@ public class CheckoutService {
 
     @Transactional
     public Map<String, Object> checkoutAllItems(Integer userId, PaymentMethodEnum paymentMethod, 
-                                               Integer shippingAddressId, String notes) {
+                                               Long shippingAddressId, String notes) {
         // Lấy tất cả sản phẩm trong giỏ hàng
         List<CartItem> cartItems = cartItemService.getCartItemsByCartId(userId);
         
@@ -89,7 +89,7 @@ public class CheckoutService {
 
 @Transactional
 public Map<String, Object> checkoutCart(Integer userId, Integer cartId, PaymentMethodEnum paymentMethod,
-                                        Integer shippingAddressId, String notes) {
+                                        Long shippingAddressId, String notes) {
     // Lấy tất cả sản phẩm trong giỏ hàng theo cartId
     List<CartItem> cartItems = cartItemService.getCartItemsByCartId(cartId);
 
@@ -132,7 +132,7 @@ public Map<String, Object> checkoutCart(Integer userId, Integer cartId, PaymentM
 
     @Transactional
     public Map<String, Object> checkoutSelectedItems(Integer userId, PaymentMethodEnum paymentMethod,
-                                                   List<Integer> selectedProductIds, Integer shippingAddressId, 
+                                                   List<Integer> selectedProductIds, Long shippingAddressId, 
                                                    String notes) {
         if (selectedProductIds == null || selectedProductIds.isEmpty()) {
             Map<String, Object> response = new HashMap<>();
