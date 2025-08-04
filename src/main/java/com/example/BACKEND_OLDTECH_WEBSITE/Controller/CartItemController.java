@@ -2,6 +2,7 @@ package com.example.BACKEND_OLDTECH_WEBSITE.Controller;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Cart.CartItemDTO;
 import com.example.BACKEND_OLDTECH_WEBSITE.Enums.PaymentMethodEnum;
+import com.example.BACKEND_OLDTECH_WEBSITE.Exception.ProductAlreadyInCartException;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.CartItem;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.User;
 import com.example.BACKEND_OLDTECH_WEBSITE.Service.CartItemService;
@@ -16,8 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.*;
 
+import java.beans.PropertyEditorSupport;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
@@ -35,12 +38,13 @@ public class CartItemController {
     @Autowired
     private UserService userService;// CUSTOMER - Thêm sản phẩm vào giỏ hàng
     @PostMapping("/addItem")
-    @PreAuthorize("hasAuthority('Customer')")
     public ResponseEntity<?> addItem(@RequestParam Integer productId) {
         try {
-            // Lấy userId từ token
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            Integer userId = userService.getUserIdFromAuthentication(authentication);
+            Integer userId = null;
+            if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal())) {
+                userId = userService.getUserIdFromAuthentication(authentication);
+            }
             // Validate product availability before adding to cart
             if (!cartItemService.isProductAvailable(productId)) {
                 Map<String, Object> response = new HashMap<>();
@@ -49,20 +53,44 @@ public class CartItemController {
                 response.put("productId", productId);
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
             }
-            cartItemService.addItem(userId, productId);
-            // Tự động tính tổng tiền sau khi thêm sản phẩm
-            BigDecimal newTotal = cartItemService.getTotalPriceByUserId(userId);
+            if (userId != null) {
+                cartItemService.addItem(userId, productId);
+                BigDecimal newTotal = cartItemService.getTotalPriceByUserId(userId);
+                Map<String, Object> response = new HashMap<>();
+                response.put("message", "Đã thêm sản phẩm vào giỏ hàng thành công");
+                response.put("success", true);
+                response.put("newTotalPrice", newTotal);
+                response.put("productId", productId);
+                logger.info("Người dùng {} đã thêm sản phẩm {} vào giỏ hàng. Tổng tiền mới: {}", userId, productId, newTotal);
+                return ResponseEntity.ok(response);
+            } else {
+                // Guest user: inform frontend to handle cart in localStorage or cookies
+                Map<String, Object> response = new HashMap<>();
+                response.put("message", "Bạn chưa đăng nhập. Vui lòng đăng nhập để lưu giỏ hàng trên hệ thống, hoặc tiếp tục mua sắm với giỏ hàng tạm thời trên trình duyệt.");
+                response.put("success", true);
+                response.put("guestCart", true);
+                response.put("productId", productId);
+                return ResponseEntity.ok(response);
+            }
+        } catch (ProductAlreadyInCartException e) {
             Map<String, Object> response = new HashMap<>();
-            response.put("message", "Đã thêm sản phẩm vào giỏ hàng thành công");
-            response.put("success", true);
-            response.put("newTotalPrice", newTotal);
+            response.put("message", e.getMessage());
+            response.put("success", false);
             response.put("productId", productId);
-            logger.info("Người dùng {} đã thêm sản phẩm {} vào giỏ hàng. Tổng tiền mới: {}", userId, productId, newTotal);
-            return ResponseEntity.ok(response);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         } catch (EntityNotFoundException e) {
-            return handleException("Không tìm thấy sản phẩm", e, HttpStatus.NOT_FOUND);
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", e.getMessage());
+            response.put("success", false);
+            response.put("productId", productId);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
         } catch (Exception e) {
-            return handleException("Lỗi khi thêm sản phẩm vào giỏ hàng", e, HttpStatus.INTERNAL_SERVER_ERROR);
+            logger.error("Lỗi khi thêm sản phẩm vào giỏ hàng", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Lỗi không xác định khi thêm sản phẩm vào giỏ hàng");
+            response.put("success", false);
+            response.put("productId", productId);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 
@@ -167,7 +195,7 @@ public class CartItemController {
     @PreAuthorize("hasAuthority('Customer')")
     public ResponseEntity<?> checkoutAllItems(
             @RequestParam PaymentMethodEnum paymentMethod,
-            @RequestParam(required = false) Integer shippingAddressId,
+            @RequestParam(required = false) Long shippingAddressId,
             @RequestParam(required = false) String notes) {
         try {
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -191,7 +219,7 @@ public class CartItemController {
 public ResponseEntity<?> checkoutCart(
         @RequestParam PaymentMethodEnum paymentMethod,
         @RequestParam Integer cartId,
-        @RequestParam(required = false) Integer shippingAddressId,
+        @RequestParam(required = false) Long shippingAddressId,
         @RequestParam(required = false) String notes) {
     try {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -273,6 +301,16 @@ public ResponseEntity<?> checkoutCart(
             logger.error("Error getting current authenticated user: {}", e.getMessage());
             throw new EntityNotFoundException("Không thể xác định người dùng hiện tại");
         }
+    }
+
+    @InitBinder
+    public void initBinder(WebDataBinder binder) {
+        binder.registerCustomEditor(PaymentMethodEnum.class, new PropertyEditorSupport() {
+            @Override
+            public void setAsText(String text) {
+                setValue(PaymentMethodEnum.fromString(text));
+            }
+        });
     }
 
 

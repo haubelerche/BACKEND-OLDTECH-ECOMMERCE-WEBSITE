@@ -1,6 +1,7 @@
 package com.example.BACKEND_OLDTECH_WEBSITE.Service;
 
 import com.example.BACKEND_OLDTECH_WEBSITE.DTO.Cart.CartItemDTO;
+import com.example.BACKEND_OLDTECH_WEBSITE.Exception.ProductAlreadyInCartException;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.CartItem;
 import com.example.BACKEND_OLDTECH_WEBSITE.Model.Product;
 // import com.example.BACKEND_OLDTECH_WEBSITE.Model.User; // User might be needed for userId -> cartId logic
@@ -57,7 +58,7 @@ public class CartItemService {
 
         // Check if item already exists in cart
         if (cartItemRepository.findByCartIdAndProduct(cartId, product).isPresent()) {
-            throw new IllegalArgumentException("Sản phẩm đã có trong giỏ hàng");
+            throw new ProductAlreadyInCartException("Sản phẩm đã có trong giỏ hàng");
         }
 
         CartItem newItem = new CartItem();
