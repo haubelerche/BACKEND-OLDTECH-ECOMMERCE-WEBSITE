@@ -28,8 +28,8 @@ public class Orders {
     @Column(name = "user_id", columnDefinition = "INT UNSIGNED")
     private Integer userId;
 
-    @Column(name = "shipping_address_id", columnDefinition = "INT UNSIGNED")
-    private Integer shippingAddressId;
+    @Column(name = "shipping_address_id", columnDefinition = "BIGINT UNSIGNED")
+    private Long shippingAddressId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_method")

@@ -608,17 +608,22 @@ public class OrderController {
                 // Find user's default or first address
                 Integer addressId = findUserDefaultAddress(authenticatedUser.getUserId());
                 if (addressId != null) {
-                    order.setShippingAddressId(addressId);
+                    order.setShippingAddressId(addressId.longValue()); // FIX: Convert Integer to Long
                 } else {
+                    logger.error("[ORDER] Shipping address missing for user {}. orderRequest: {}", authenticatedUser.getUserId(), orderRequest);
                     return handleException("Địa chỉ giao hàng không được cung cấp và không tìm thấy địa chỉ cho người dùng",
                             new IllegalArgumentException("Shipping address is required"), HttpStatus.BAD_REQUEST);
                 }
-            }            Orders createdOrder = orderService.createOrder(order);
-
-            // Convert to response DTO
-            OrderResponse orderResponse = convertToOrderResponse(createdOrder);
-
-            return new ResponseEntity<>(orderResponse, HttpStatus.CREATED);
+            }
+            try {
+                Orders createdOrder = orderService.createOrder(order);
+                // Convert to response DTO
+                OrderResponse orderResponse = convertToOrderResponse(createdOrder);
+                return new ResponseEntity<>(orderResponse, HttpStatus.CREATED);
+            } catch (Exception ex) {
+                logger.error("[ORDER] Error creating order for user {}: {}", authenticatedUser.getUserId(), ex.getMessage(), ex);
+                return handleException("Lỗi tạo đơn hàng (chi tiết: " + ex.getMessage() + ")", ex, HttpStatus.INTERNAL_SERVER_ERROR);
+            }
         } catch (IllegalArgumentException e) {
             return handleException("Lỗi tạo đơn hàng", e, HttpStatus.BAD_REQUEST);
         } catch (Exception e) {
@@ -970,7 +975,7 @@ public class OrderController {
         response.setOrderId(order.getOrderId());
         response.setOrderTime(order.getOrderTime());
         response.setUserId(order.getUserId());
-        response.setShippingAddressId(order.getShippingAddressId());
+        response.setShippingAddressId(order.getShippingAddressId() != null ? order.getShippingAddressId().intValue() : null); // FIX: Convert Long to Integer
         response.setPaymentMethod(order.getPaymentMethod());
         response.setTotalAmount(order.getTotalAmount());
         response.setStatus(order.getStatus());
@@ -1081,7 +1086,7 @@ public class OrderController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of(
                     "success", false, 
-                    "message", "Lỗi hệ thống khi hoàn thành đơn hàng: " + e.getMessage()
+                    "message", "Lỗi hệ thống khi hoàn thành đơn hàng"
                 ));
         }
     }
