@@ -1,7 +1,6 @@
 # Oldtech Ecommerce Website - Secondhand Devices Marketplace (Backend)
 
 ## Overview
-**Year:** 2025  
 The **Oldtech Ecommerce Website** is a backend system designed for a secondhand devices marketplace.
 Built with **Spring Boot** and **Java 23**, it delivers a modern, production-ready framework optimized for scalability, security, and real-time operations.
 
