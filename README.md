@@ -15,6 +15,7 @@ Built with **Spring Boot** and **Java 23**, it delivers a modern, production-rea
 
 ## Customer Pages
 <img width="1841" height="891" alt="Trang chủ" src="https://github.com/user-attachments/assets/2fb062c4-2267-4b74-86aa-3834f65c1f6e" />
+
 ![Danh mục(Trang chủ)](https://github.com/user-attachments/assets/1ea4778e-e410-47ea-8b3b-3cd17d162078)
 
 
